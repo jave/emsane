@@ -136,6 +136,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; macro to define named and tracked classes
 
+
+
 (defmacro emsane-declare-instance-get (mname &optional fn-doc list-doc)
   "declares getter and instance lists"
   `(progn
@@ -159,30 +161,40 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; eieio class definitions
 
-(defclass emsane-tracker (eieio-instance-tracker)
+;;TODO emsane-tracker isnt a stellar name, since we are named, tracked, and instance-inherited together
+(defclass emsane-tracker (eieio-named
+                          eieio-instance-tracker
+                          eieio-instance-inheritor
+                          )
   (()))
-;;TODO instance tracker is nice but doesnt do quite what i had in mind
+;; instance tracker is nice but doesnt do quite what i had in mind
 ;; - a plist with object-name = key
 ;; - posibility of several instance lists
 ;; maybe i shouldnt use "clone" then, which I do super-frequently
 ;;OTOH clone is just a generic method, and i do as i please...
 
+;; new idea: just overide initialize-instance, delete new obj from list 1st
+;;then call base. this doesnt allow more than one tracker list but that doesnt seem to matter atm
+
+(defmethod initialize-instance ((this emsane-tracker)
+				       &rest slots)
+  (let*
+      ((sym (oref this tracking-symbol))
+       (already-existing (object-assoc (oref this :object-name) :object-name (symbol-value sym))))
+    (if already-existing (delete-instance already-existing))
+    (call-next-method)
+  ))
+
 (defmethod clone ((obj emsane-tracker) &rest params)
   "enable instance tracking also for clones."
-  (let ((theclone (call-next-method params))) ;;we want clone for eieio-instance-inheritor to execute now
-    (initialize-instance theclone) ;;becase clone doesnt do object init, and we want instance tracking
-    theclone))
-
-(defmethod emsane-clone-internal ((obj emsane-tracker) &rest params)
-  "internal testing, clone withouth instance tracking..."
-  (let ((theclone (call-next-method params))) 
-    ;;(initialize-instance theclone)  ;;dont call this when we are cloning to an auxiliary list
+  ;;we want clone for eieio-instance-inheritor to execute
+  ;;also clone doesnt do object init, so so it explicitly
+  (let ((theclone (call-next-method))) 
+    (initialize-instance theclone)
     theclone))
 
 
-
-(defclass emsane-scanner (eieio-named
-                          emsane-tracker)
+(defclass emsane-scanner (emsane-tracker)
   ((tracking-symbol :initform 'emsane-scanner-list)
    (scanwidth :initarg :scanwidth
               :documentation "physical width of scanner")
@@ -212,8 +224,7 @@
   "class describing a SANE scanner")
 
 
-(defclass emsane-job (eieio-named              ;; we want a object-name slot
-                      emsane-tracker   ;; store instantiated objects in a list
+(defclass emsane-job (emsane-tracker   ;; store instantiated objects in a list
                       )
   ((tracking-symbol :initform 'emsane-job-list)
    (section-list :initarg :section-list
@@ -296,9 +307,7 @@
   :abstract t )
 
 
-(defclass emsane-section (eieio-named              ;; we want a object-name slot
-                          eieio-instance-inheritor ;; use "clone" to instantiate with a template
-                          emsane-tracker   ;; store instantiated objects in a list(needs special clone override)
+(defclass emsane-section (emsane-tracker   ;; store instantiated objects in a list(needs special clone override)
                           emsane-section-interface
                           )
   ((tracking-symbol :initform 'emsane-section-list)
@@ -567,16 +576,29 @@ create it if need be."
   (setq emsane-next-pagenumber pagenum)
   (emsane-set-mode-line))
 
-(defun emsane-set-mode-line ()
+;; (defun emsane-set-mode-line ()
+;;   "Update the modeline with the current job, pagenumber, etc."
+;;   (setq mode-line-buffer-identification
+;;         (nconc (propertized-buffer-identification "%b")
+;;                (list
+;;                 (format " %s [%s %s] %s"
+;;                         emsane-current-job-id
+;;                         (if emsane-current-job (oref emsane-current-job object-name) "no job")
+;;                         (if emsane-current-job (oref emsane-current-section object-name) "no section")
+;;                         emsane-next-pagenumber)))))
+
+;;TODO have a look at using force-mode-line-update
+(defun emsane-set-mode-line (section)
   "Update the modeline with the current job, pagenumber, etc."
   (setq mode-line-buffer-identification
         (nconc (propertized-buffer-identification "%b")
                (list
                 (format " %s [%s %s] %s"
-                        emsane-current-job-id
-                        (if emsane-current-job (oref emsane-current-job object-name) "no job")
-                        (if emsane-current-job (oref emsane-current-section object-name) "no section")
-                        emsane-next-pagenumber)))))
+                        "?" ;;emsane-current-job-id
+                        "?" ;;(if emsane-current-job (oref emsane-current-job object-name) "no job")
+                        (oref section object-name)
+                        "?";;emsane-next-pagenumber
+                        )))))
 
 
 
@@ -843,11 +865,21 @@ Argument STRING output from scanadf."
        (tx nil)
        (op-list (oref section :operation-list))
        )
+    ;;TODO refactor this: - cond looks strange - factor out string match code from action code
     (cond
      ((string-match "Scanned document \\(.*\\)" string) ;;a string emitted by scanadf
       (setq filename (match-string 1 string))
+      (emsane-line-default-postop filename)
+      (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) ;;this must match the scanned page, which must have a .scan suffix
+      (setq emsane-next-pagenumber
+            (+ 1 (string-to-number (match-string 2 filename))))
+      ;;(emsane-set-mode-line section) ;;TODO update modeline in some intelligent way
+      )
+     (t );;TODO do something if line didnt match
+      )))
 
-      ;;begin tx
+(defun emsane-line-default-postop (filename)
+   ;;begin tx
       (setq tx (emsane-postop-transaction "tx"))
       (emsane-postop-setenv tx 'SCANFILE filename)
       (emsane-postop-setenv tx 'SCANFILEBASE (substring filename 0 ( -(length emsane-scan-file-suffix))))
@@ -868,12 +900,7 @@ Argument STRING output from scanadf."
       (emsane-postop-push postop-queue tx)
       ;;end tx
       (emsane-postop-go postop-queue)
-      (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) ;;this must match the scanned page, which must have a .scan suffix
-      (setq emsane-next-pagenumber
-            (+ 1 (string-to-number (match-string 2 filename))))
-      ;;(emsane-set-mode-line) ;;TODO global state kills my unit tests 
-      ))))
-
+     )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; setup the postprocess queue

@@ -19,7 +19,22 @@
                 :image-type-options nil
                 )
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;cloning; i provide an own clone method that supports instance tracking
+(deftest emsane-clone ()
+  (should (not (null (emsane-scanner-get "test"))));;must be defined
+  (let*
+      ((theclone (clone (emsane-scanner-get "test") "test2")))
+    (should (not (null theclone)))
+    (should (equal theclone (emsane-scanner-get "test2")))
+    (should (equal "test2" (oref  theclone :object-name)))
+    (should (equal "test" (oref  (emsane-scanner-get "test") :object-name)))
+  )
+  )
+;;(emsane-clone-internal (emsane-scanner-get "test"))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;queue stuff
 (deftest emsane-postop-queue-push-pop ()
   ;;simple push/pop test
   (let*
@@ -156,9 +171,11 @@
   (mkdir emsane-test-jobdir t)
   )
 
+(defvar emsane-test-scanfile  "~/.elisp/emsane/0100-0001.scan");;TODO remove hardcode
+
 (deftest emsane-line-handler ()
   (emsane-test-setup-jobdir)
-  (copy-file  "~/.elisp/emsane/0100-0001.scan" emsane-test-jobdir);;TODO remove hardcode
+  (copy-file emsane-test-scanfile emsane-test-jobdir)
   ;;simulate the line handler receving a scaned file notification.
   ;;this will also test the default behaviour of the postop queue
   (emsane-line-handler
@@ -193,7 +210,9 @@
   )
 
 (deftest emsane-image-size ()
-;;  (emsane-image-size "") ;;TODO get a test image to test with
+  ;;TODO this test is annoyingly slow. probably because the file is large?
+  (copy-file emsane-test-scanfile "/tmp/tst.jpg" t) ;;file seemingly cant end in .scan when using identify
+  (should (equal '(2326 . 2362) (emsane-image-size "/tmp/tst.jpg") ))
   )
 
 (deftest emsane-parse-paper-size ()

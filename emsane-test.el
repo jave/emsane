@@ -212,7 +212,7 @@
 (deftest emsane-image-size ()
   ;;TODO this test is annoyingly slow. probably because the file is large?
   (copy-file emsane-test-scanfile "/tmp/tst.jpg" t) ;;file seemingly cant end in .scan when using identify
-  (should (equal '(2326 . 2362) (emsane-image-size "/tmp/tst.jpg") ))
+  (should (equal '(1236 . 1107) (emsane-image-size "/tmp/tst.jpg") ))
   )
 
 (deftest emsane-parse-paper-size ()

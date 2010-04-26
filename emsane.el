@@ -164,20 +164,15 @@
 ;;TODO emsane-tracker isnt a stellar name, since we are named, tracked, and instance-inherited together
 (defclass emsane-tracker (eieio-named
                           eieio-instance-tracker
-                          eieio-instance-inheritor
+                          ;;eieio-instance-inheritor;;TODO dont think i need this anymore
                           )
-  (()))
-;; instance tracker is nice but doesnt do quite what i had in mind
-;; - a plist with object-name = key
-;; - posibility of several instance lists
-;; maybe i shouldnt use "clone" then, which I do super-frequently
-;;OTOH clone is just a generic method, and i do as i please...
-
-;; new idea: just overide initialize-instance, delete new obj from list 1st
-;;then call base. this doesnt allow more than one tracker list but that doesnt seem to matter atm
+  (())
+  "emsane-tracker works similar to eieio-instance-tracker, but it is also named, and the name works like a primary key.
+there can only be one emsane-tracker object with a particular name.")
 
 (defmethod initialize-instance ((this emsane-tracker)
 				       &rest slots)
+  "make sure only 1 object with a particular name on the tracker list."
   (let*
       ((sym (oref this tracking-symbol))
        (already-existing (object-assoc (oref this :object-name) :object-name (symbol-value sym))))

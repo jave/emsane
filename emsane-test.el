@@ -22,13 +22,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;cloning; i provide an own clone method that supports instance tracking
 (deftest emsane-clone ()
-  (should (not (null (emsane-scanner-get "test"))));;must be defined
+  (should-not (null (emsane-scanner-get "test")));;must be defined
   (let*
       ((theclone (clone (emsane-scanner-get "test") "test2")))
-    (should (not (null theclone)))
+    (should-not (null theclone))
     (should (equal theclone (emsane-scanner-get "test2")))
     (should (equal "test2" (oref  theclone :object-name)))
     (should (equal "test" (oref  (emsane-scanner-get "test") :object-name)))
+    (should-error  (clone (emsane-scanner-get "test")));;anon clone is too much bother, so disable it
   )
   )
 ;;(emsane-clone-internal (emsane-scanner-get "test"))
@@ -116,8 +117,8 @@
 
 (deftest emsane-handle-slot ()
   "check that definition chaining works. make a parent and child, check to see the child can overide the parent"
-  (let* ((child (clone emsane-the-section-defaults)  )
-         (parent (clone emsane-the-section-defaults)  ))
+  (let* ((child (clone emsane-the-section-defaults "child")  )
+         (parent (clone emsane-the-section-defaults "parent")  ))
     (oset child :size "a4")
     (oset parent :size "a3")
     (oset parent :start-page 242)
@@ -125,8 +126,6 @@
     (oset child :parent parent)
     (should (equal "a4" (emsane-handle-slot child :size))) ;;we get a4 from the child here and not 210x297, nor a3
     (should (equal 242 (emsane-handle-slot child :start-page))) ;;we should get the parent value since the child doesnt care
-    ;;(assert-equal 1 (emsane-handle-slot p1 :start-page))
-
     ;;now test the getters, who wrap handle-slot and provides further processing
     (should (equal '(210 . 297) (emsane-get-size child)));;get-size parses a4 to (210x297)
     ))
@@ -138,7 +137,8 @@
 
 (deftest emsane-scan ()
   "basic test of emsane-scan. check the buffer for nice output"
-  (progn 
+  (progn
+    (emsane-killall-scanadf);;workaround
   (emsane-test-setup-jobdir)
     (let*
       ;;we need a clone since otherwise the orignal setting object will be modified
@@ -162,6 +162,39 @@
                    (lambda (proc string)  (with-current-buffer (process-buffer proc) (insert (format "filter:%s\n" string))))
                    )))
    )
+
+
+(deftest emsane-scan-2 ()
+  "slightly less basic test of emsane-scan. check the buffer for nice output.
+try more of the postop stuff than the basic test."
+  (progn
+    (emsane-killall-scanadf);;workaround
+  (emsane-test-setup-jobdir)
+    (let*
+      ;;we need a clone since otherwise the orignal setting object will be modified
+        ((settings (emsane-section-value "test-settings"
+                                         :operation-list nil
+                                             :scanner "test"
+                                             :source 'duplex
+                                             :mode 'color
+                                             :resolution 150
+                                             :parent nil ;;dont mess up this test with too much deps
+                                             :file-pattern "0100-%04d"
+                                             :image-type 'jpg
+                                             :size "a4"
+                                             :start-page 1
+                        ))
+         (buffer (pop-to-buffer "*emsane test scan buffer 2*"))
+         (q   (emsane-postop-queue "test_transaction_queue"
+                        :default-directory emsane-test-jobdir
+                        :process-buffer (get-buffer-create "*emsane postop test*")
+                        :error-hooks    (list (lambda () (error "test postop q error hook called"))) ))
+         )
+      (emsane-scan settings buffer  q
+                   )))
+   )
+
+
 
 
 
@@ -198,6 +231,16 @@
                         :error-hooks    (list (lambda () (error "test postop q error hook called"))) )
    )
     )
+
+(defun emsane-killall-scanadf ()
+  "when the process sentinel is buggy, emacs doesnt delete a finished process properly, this is for cleaning"
+  (mapcar
+   (lambda (x) 
+     (if (equal "scanadf" (substring (process-name x)  0 -3  ))
+                   (progn
+                     (delete-process (process-name x))
+                     )))
+   (process-list)))
 
 (deftest emsane-process-running ()
    ;;just check no process running in this buffer

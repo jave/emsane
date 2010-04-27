@@ -171,19 +171,20 @@
 there can only be one emsane-tracker object with a particular name.")
 
 (defmethod initialize-instance ((this emsane-tracker)
-				       &rest slots)
+                                &rest slots)
   "make sure only 1 object with a particular name on the tracker list."
   (let*
       ((sym (oref this tracking-symbol))
        (already-existing (object-assoc (oref this :object-name) :object-name (symbol-value sym))))
     (if already-existing (delete-instance already-existing))
     (call-next-method)
-  ))
+    ))
 
 (defmethod clone ((obj emsane-tracker) &rest params)
   "enable instance tracking also for clones."
   ;;we want clone for eieio-instance-inheritor to execute
   ;;also clone doesnt do object init, so so it explicitly
+  (assert (stringp (car params))) ;;1st arg must be a new name!
   (let ((theclone (call-next-method))) 
     (initialize-instance theclone)
     theclone))
@@ -298,6 +299,8 @@ there can only be one emsane-tracker object with a particular name.")
    (image-type :initarg :image-type
                :accessor emsane-section-get-image-type
                :documentation "image type(djvu,jpeg)")
+   (operation-list :initarg :operation-list :initform nil
+                   :documentation "A list of operations to be used for every image scanned in this section")   
    )
   :abstract t )
 
@@ -306,8 +309,7 @@ there can only be one emsane-tracker object with a particular name.")
                           emsane-section-interface
                           )
   ((tracking-symbol :initform 'emsane-section-list)
-   (operation-list :initarg :operation-list :initform nil
-                   :documentation "A list of operations to be used for every image scanned in this section")
+
    )
   "class describing a section")
 
@@ -320,19 +322,27 @@ there can only be one emsane-tracker object with a particular name.")
   )
 
 
+(defclass emsane-process-state ()
+  ((section :initarg :section)
+   (subsection :initarg :subsection)
+   (next-pagenumber :initarg :next-pagenumber)
+   (postop-queue :initarg :postop-queue)
+   )
+  )
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;,,
 (defvar emsane-the-section-defaults
   (emsane-section-value "the-section-defaults"
-                            :size (emsane-query-paper-size "paper-size" :prompt "Paper size" :values emsane-paper-sizes)
-                            :start-page   (emsane-query-integer "startpage" :prompt "Start-page")
-                            :scanner (emsane-query-object "scanners" :prompt "Scanner" :object-type 'scanner )
-                            :source  (emsane-query-atom "sources" :prompt "Source"  :values '(duplex simplex ))
-                            :mode    (emsane-query-atom "modes" :prompt "Mode" :values '(lineart color ))
-                            :resolution   (emsane-query-integer "resolution" :prompt "Resolution")
-                            :file-pattern (emsane-query-string  "file-pattern" :prompt "File pattern" :require-match nil)
-                            :image-type   (emsane-query-atom "image-types"  :prompt "Image type"  :values '(djvu jpeg ))
-                            :parent nil
-                            )
+                        :size (emsane-query-paper-size "paper-size" :prompt "Paper size" :values emsane-paper-sizes)
+                        :start-page   (emsane-query-integer "startpage" :prompt "Start-page")
+                        :scanner (emsane-query-object "scanners" :prompt "Scanner" :object-type 'scanner )
+                        :source  (emsane-query-atom "sources" :prompt "Source"  :values '(duplex simplex ))
+                        :mode    (emsane-query-atom "modes" :prompt "Mode" :values '(lineart color ))
+                        :resolution   (emsane-query-integer "resolution" :prompt "Resolution")
+                        :file-pattern (emsane-query-string  "file-pattern" :prompt "File pattern" :require-match nil)
+                        :image-type   (emsane-query-atom "image-types"  :prompt "Image type"  :values '(djvu jpeg ))
+                        :parent nil
+                        )
   "default values for section slots")
 
 ;;;;;;;;;;;;;;;;;;;;;;;
@@ -349,7 +359,7 @@ there can only be one emsane-tracker object with a particular name.")
               )
           sv))
     (emsane-handle-slot (oref this :parent) slot)
-      ))
+    ))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;,
@@ -382,12 +392,12 @@ there can only be one emsane-tracker object with a particular name.")
   (let*
       ((scanner (emsane-get-scanner this)))
     (emsane-source-dealias scanner  (emsane-handle-slot this 'source))))
-  
+
 (defmethod emsane-get-mode ((this emsane-section-interface))
   (let*
       ((scanner (emsane-get-scanner this)))
     (emsane-mode-dealias scanner  (emsane-handle-slot this 'mode))
-                           ))
+    ))
 
 (defmethod emsane-get-scanner ((this emsane-section-interface))
   ;;TODO getters that return objects can store object name referenses internaly
@@ -402,10 +412,14 @@ there can only be one emsane-tracker object with a particular name.")
 ;;like image-type-options?
 
 (defmethod emsane-source-dealias ((this emsane-scanner) source-alias)
-  (cadr (assoc source-alias (oref this sources))))
-
+  (let ((rv  (cadr (assoc source-alias (oref this sources)))))
+        (assert (not (null rv)) "null not allowed")
+    rv))
+  
 (defmethod emsane-mode-dealias ((this emsane-scanner) mode-alias)
-  (cadr (assoc mode-alias (oref this modes))))
+  (let ((rv (cadr (assoc mode-alias (oref this modes)))))
+    (assert (not (null rv)) "null not allowed")
+    rv))
 
 
 
@@ -651,16 +665,16 @@ JOB-ID is used to identify  the scan."
 (defconst emsane-scan-file-suffix ".scan")
 
 
- (defun emsane-scan-section (&optional section  startcount-info  job-id)
-   (interactive)
-   (unless section (setq section emsane-current-section))
-   (unless job-id (setq job-id emsane-current-job-id))
-   (emsane-scan section (current-buffer) emsane-the-postop-queue)   )
+(defun emsane-scan-section (&optional section  startcount-info  job-id)
+  (interactive)
+  (unless section (setq section emsane-current-section))
+  (unless job-id (setq job-id emsane-current-job-id))
+  (emsane-scan section (current-buffer) emsane-the-postop-queue)   )
 
-  ;;TODO
-  ;;- guard against file overwrites when scanning. ask user if overwriting is what she really wants.
-  ;;  (not sure, overwriting has proven convenient)
-  ;;- if a scan process is already running in buffer signal error and stop
+;;TODO
+;;- guard against file overwrites when scanning. ask user if overwriting is what she really wants.
+;;  (not sure, overwriting has proven convenient)
+;;- if a scan process is already running in buffer signal error and stop
 (defmethod emsane-scan ((this emsane-section-interface) buffer postop-queue &optional the-sentinel the-filter)
   (if (emsane-process-running) (error "scanner process already running in this buffer"))
   (unless the-sentinel (setq the-sentinel 'emsane-sentinel))
@@ -698,8 +712,8 @@ JOB-ID is used to identify  the scan."
          ;; funnily the "fujitsu" requires --page-height, while the "brother" "test" and "epson" fails with it.
          (page-height (if  (oref scanner :needs-pageheight) 
                           (list "--page-height" (number-to-string paperheight))))
-         (args0 (list "scanadf" buffer "scanadf"))
-         (args `("--device-name" ,(oref scanner :device)
+         (args `("scanadf" ,buffer "scanadf"
+                 "--device-name" ,(oref scanner :device)
                  ,@(if dealiased-source (list "--source" dealiased-source))
                  "--mode" ,dealiased-mode;;(emsane-mode-dealias scanner  mode)
                  ,@options;;(emsane-get-options scanner  emsane-current-section) ;;scanner specific options
@@ -717,19 +731,23 @@ JOB-ID is used to identify  the scan."
                  ;;y <= paperheight
                  "-y" ,(number-to-string paperheight)
                  ,@page-height))
-         (args1 args);;TODO let postops, or whatever, funkily change the flags here ;;TODO flags should maybe be an assoc list, that then is flattened
          (dbg-process
-          (format "scan command: %s\n"
-                  (mapconcat (lambda (x) x) args1 " ")))
-         
+          (format "scan command: %s\n" args
+                  (mapconcat (lambda (x) x) (cddr args) " ")
+           
+                  ))
+         ;;TODO verify the type of each element of arg. no nil:s for instance
+         ;;(all-not-nil  (mapconcat (lambda (x) (stringp x)) (cddr args) " "))
          (scan-process
           (apply 'start-file-process
-                  (append args0 args1)
-                )))
+                 args
+                 )))
       (insert dbg-process)
       (insert (format "job-dir:%s\n" job-dir))
       (set-process-sentinel scan-process the-sentinel)
       (set-process-filter scan-process the-filter)
+      (process-put scan-process 'emsane-process-state
+                   (emsane-process-state "procstate" :section this :postop-queue postop-queue))
       )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -765,9 +783,9 @@ JOB-ID is used to identify  the scan."
   (set (make-local-variable 'emsane-current-job-id) nil) ;;per job
   (set (make-local-variable 'emsane-current-default-scanner) emsane-default-scanner) ;;per job(there is an other emsane-scanner setting per buffer/scan process)
   
-  (set (make-local-variable 'emsane-current-section) nil) ;;per buffer/scan process
-  (set (make-local-variable 'emsane-subsection) 0) ;;per buffer/scan process
-  (set (make-local-variable 'emsane-next-pagenumber) 1) ;;per buffer/scan process
+  ;; (set (make-local-variable 'emsane-current-section) nil) ;;per buffer/scan process
+  ;; (set (make-local-variable 'emsane-subsection) 0) ;;per buffer/scan process
+  ;; (set (make-local-variable 'emsane-next-pagenumber) 1) ;;per buffer/scan process
   
   (emsane-set-mode-line))
 
@@ -836,17 +854,25 @@ Argument MSG is the exit code."
 ;; Document feeder jammed
 ;; scan finished?
 
+
 (defun emsane-filter (proc string)
   "Filters scanadf output.
 Argument PROC scanadf process.
 Argument STRING output from scanadf."
   (with-current-buffer (process-buffer proc)
-    (let ((moving (= (point) (process-mark proc))))
+    (let ((moving (= (point) (process-mark proc)))
+          (state (process-get proc 'emsane-process-state)))
       (save-excursion
+        (assert (not (null state)))
         ;; Insert the text, advancing the process marker.
         (goto-char (process-mark proc))
         ;;break up string in lines and handle each
-        (mapcar (lambda (line) (emsane-line-handler line emsane-current-section emsane-the-postop-queue)) (split-string string "\n" t))
+        (mapcar (lambda (line) (emsane-line-handler line
+                                                    (oref state :section)
+                                                    (oref state :postop-queue)
+                                                    ;;emsane-current-section ;;TODO
+                                                    ;;emsane-the-postop-queue ;;TODO
+                                                    )) (split-string string "\n" t))
         (insert (format "filter:<<%s>>\n" ;;TODO should be possible to visit image files in the scanadf buffer!
                         (substring string 0 -1)
                         ))
@@ -871,31 +897,31 @@ Argument STRING output from scanadf."
       ;;(emsane-set-mode-line section) ;;TODO update modeline in some intelligent way
       )
      (t );;TODO do something if line didnt match
-      )))
+     )))
 
 (defun emsane-line-default-postop (filename)
-   ;;begin tx
-      (setq tx (emsane-postop-transaction "tx"))
-      (emsane-postop-setenv tx 'SCANFILE filename)
-      (emsane-postop-setenv tx 'SCANFILEBASE (substring filename 0 ( -(length emsane-scan-file-suffix))))
-      (if (null op-list) ;;nil currently means do a default conversion
-          (progn
-            ;;push a default op:s for now. these converts and deletes original.
-            ;;since ops are pushed delete goes before convert which is harder to read TODO add prepend operation
-            (emsane-postop-push tx (emsane-postop-lisp-operation "op"
-                                                                 :operation-lambda
-                                                                 (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE)))))
-            (emsane-postop-push tx (emsane-mkpostop-convert section)))
-        ;;TODO else push the op-list, assume "dust" now EXPERIMENTAL
-        (mapcar (lambda (x)
-                  (emsane-postop-push tx x))
-                (reverse (emsane-mkpostop-dustdetect)))
-        )
+  ;;begin tx
+  (setq tx (emsane-postop-transaction "tx"))
+  (emsane-postop-setenv tx 'SCANFILE filename)
+  (emsane-postop-setenv tx 'SCANFILEBASE (substring filename 0 ( -(length emsane-scan-file-suffix))))
+  (if (null op-list) ;;nil currently means do a default conversion
+      (progn
+        ;;push a default op:s for now. these converts and deletes original.
+        ;;since ops are pushed delete goes before convert which is harder to read TODO add prepend operation
+        (emsane-postop-push tx (emsane-postop-lisp-operation "op"
+                                                             :operation-lambda
+                                                             (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE)))))
+        (emsane-postop-push tx (emsane-mkpostop-convert section)))
+    ;;TODO else push the op-list, assume "dust" now EXPERIMENTAL
+    (mapcar (lambda (x)
+              (emsane-postop-push tx x))
+            (reverse (emsane-mkpostop-dustdetect)))
+    )
 
-      (emsane-postop-push postop-queue tx)
-      ;;end tx
-      (emsane-postop-go postop-queue)
-     )
+  (emsane-postop-push postop-queue tx)
+  ;;end tx
+  (emsane-postop-go postop-queue)
+  )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; setup the postprocess queue

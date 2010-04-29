@@ -3,6 +3,7 @@
 (require 'ert)
 (require 'emsane)
 (require 'emsane-postop)
+(require 'emsane-config)
 
 ;; properties specific for the "test" virtual scan device SANE provides
 ;;(setq emsane-scanner-list nil)
@@ -11,11 +12,13 @@
                 :scanwidth 216
                 ;;:mode ;;TODO Color or Gray and depth options for test
                 :modes '((color "Color")
-                         (gray "Gray"))
+                         (gray "Gray")
+                         (lineart "Gray")) ;;TODO should have a mode specific flag --depth 1
                 
                 :options '("--test-picture"
                            "Color pattern")
-                :sources '((duplex  "Automatic Document Feeder"))
+                :sources '((duplex  "Automatic Document Feeder")
+                           (simplex  "Automatic Document Feeder"))
                 :image-type-options nil
                 )
 
@@ -130,19 +133,16 @@
     (should (equal '(210 . 297) (emsane-get-size child)));;get-size parses a4 to (210x297)
     ))
 
-(defvar emsane-test-jobdir "/tmp/emsane-test/")
 
-
-(defvar emsane-test-jobdir "/tmp/emsane-test/")
 
 (deftest emsane-scan ()
   "basic test of emsane-scan. check the buffer for nice output"
   (progn
     (emsane-killall-scanadf);;workaround
-  (emsane-test-setup-jobdir)
     (let*
       ;;we need a clone since otherwise the orignal setting object will be modified
-        ((settings (emsane-section-value "test-settings"
+        ((dir (emsane-test-setup-jobdir "1"))
+         (settings (emsane-section-value "test-settings"
                                              :scanner "test"
                                              :source 'duplex
                                              :mode 'color
@@ -154,10 +154,11 @@
                                              :start-page 1
                         ))
          (buffer (pop-to-buffer "*emsane test scan buffer*")))
-      (emsane-scan settings buffer    (emsane-postop-queue "test_transaction_queue"
-                        :default-directory emsane-test-jobdir
+      (emsane-scan settings    (emsane-postop-queue "test_transaction_queue"
+                        :default-directory dir
                         :process-buffer (get-buffer-create "*emsane postop test*")
                         :error-hooks    (list (lambda () (error "test postop q error hook called"))) )
+                    buffer
                    (lambda (proc msg)     (with-current-buffer (process-buffer proc)(insert (format "sentinel:%s\n" msg)) ))
                    (lambda (proc string)  (with-current-buffer (process-buffer proc) (insert (format "filter:%s\n" string))))
                    )))
@@ -169,10 +170,10 @@
 try more of the postop stuff than the basic test."
   (progn
     (emsane-killall-scanadf);;workaround
-  (emsane-test-setup-jobdir)
     (let*
       ;;we need a clone since otherwise the orignal setting object will be modified
-        ((settings (emsane-section-value "test-settings"
+        ((dir (emsane-test-setup-jobdir "2"))
+         (settings (emsane-section-value "test-settings"
                                          :operation-list nil
                                              :scanner "test"
                                              :source 'duplex
@@ -186,54 +187,101 @@ try more of the postop stuff than the basic test."
                         ))
          (buffer (pop-to-buffer "*emsane test scan buffer 2*"))
          (q   (emsane-postop-queue "test_transaction_queue"
-                        :default-directory emsane-test-jobdir
+                        :default-directory dir
                         :process-buffer (get-buffer-create "*emsane postop test*")
                         :error-hooks    (list (lambda () (error "test postop q error hook called"))) ))
          )
-      (emsane-scan settings buffer  q
+      (emsane-scan settings  q  buffer
                    )))
+   )
+
+(deftest emsane-scan-multi ()
+  " test 3 scanjobs scanning at the same time in the same dir, different sections"
+  ;;we will need a number of settings
+  ;; default-settings -- shared-settings +- book-frontmatter -- buffer1
+  ;;                                     +- book-body --------- buffer2
+  ;;                                     +- book-cover -------- buffer3
+  ;; ...
+  ;; we need 4 scanners, one running in its own buffer
+  
+  (progn
+    (emsane-killall-scanadf);;workaround
+    (let*
+        ((dir (emsane-test-setup-jobdir "multi"))
+         (ds (clone emsane-the-section-defaults "test-ds"))
+         ;;we need 4 scanners for this test
+         (sc1 (clone (emsane-scanner-get "test") "test1"))
+         (sc2 (clone (emsane-scanner-get "test") "test2"))
+         (sc3 (clone (emsane-scanner-get "test") "test3"))
+         (sc4 (clone (emsane-scanner-get "test") "test4"))
+         (ss (emsane-section-value "test-shared"
+                                   ;;:scanner "test";;TODO
+                                   :parent ds
+                                   :size "a7"
+                        ))
+         (bfs (clone (emsane-section-get "book-front-matter") "test-bf" :parent ss :scanner sc1))
+         (bbs1 (clone (emsane-section-get "book-body") "test-bb1" :parent ss :start-page 1 :scanner sc2))
+         (bbs2 (clone (emsane-section-get "book-body") "test-bb2" :parent ss :start-page 100 :scanner sc3))
+         (bcs (clone (emsane-section-get "book-cover-simplex") "test-bc" :parent ss :scanner sc4))
+         (q   (emsane-postop-queue "test_transaction_queue"
+                        :default-directory dir
+                        :process-buffer (get-buffer-create "*emsane postop test multi*")
+                        :error-hooks    (list (lambda () (error "test postop q error hook called"))) ))
+         )
+      ;;check the value chain is ok. this test is setup noninteractive, so we should never reach the default-settings object
+      (should (equal (emsane-get-size bcs) '(74 . 105)));;    ("a7"   (74 . 105))
+      (emsane-scan bfs  q)
+      (emsane-scan bbs1  q)
+      (emsane-scan bbs2  q)
+      (emsane-scan bcs   q)
+      ))
    )
 
 
 
 
+(defvar emsane-test-jobdir "/tmp/emsane-test/")
 
 
-(defun emsane-test-setup-jobdir ()
-  (delete-directory emsane-test-jobdir t)
-  (mkdir emsane-test-jobdir t)
-  )
+(defun emsane-test-setup-jobdir (subdir)
+  (let
+      ((dir (format "%s%s/" emsane-test-jobdir subdir)))
+    (if (file-exists-p  dir)(delete-directory dir t))
+    (mkdir dir t)
+    dir))
 
 (defvar emsane-test-scanfile  "~/.elisp/emsane/0100-0001.scan");;TODO remove hardcode
 
 (deftest emsane-line-handler ()
-  (emsane-test-setup-jobdir)
-  (copy-file emsane-test-scanfile emsane-test-jobdir)
-  ;;simulate the line handler receving a scaned file notification.
-  ;;this will also test the default behaviour of the postop queue
-  (emsane-line-handler
-   (format "Scanned document %s0100-0001.scan" emsane-test-jobdir)
-   (emsane-section "test-settings"
-                   :operation-list nil                                             
-                   :scanner "test"
-                   :source 'duplex
-                   :mode 'color
-                   :resolution 300
-                   ;;:parent nil ;;dont mess up this test with too much deps
-                   :file-pattern "0100-%04d"
-                   :image-type 'jpg
-                   :size "a4"
-                   :start-page 1
-                   )
-   (emsane-postop-queue "test_transaction_queue"
-                        :default-directory emsane-test-jobdir
-                        :process-buffer (get-buffer-create "*emsane postop test*")
-                        :error-hooks    (list (lambda () (error "test postop q error hook called"))) )
-   )
-    )
+  (let ((dir  (emsane-test-setup-jobdir "lh")))
+    (copy-file emsane-test-scanfile dir)
+    ;;simulate the line handler receving a scaned file notification.
+    ;;this will also test the default behaviour of the postop queue
+    (emsane-line-handler
+     (format "Scanned document %s0100-0001.scan" dir)
+     (emsane-section "test-settings"
+                     :operation-list nil                                             
+                     :scanner "test"
+                     :source 'duplex
+                     :mode 'color
+                     :resolution 300
+                     ;;:parent nil ;;dont mess up this test with too much deps
+                     :file-pattern "0100-%04d"
+                     :image-type 'jpg
+                     :size "a4"
+                     :start-page 1
+                     )
+     (emsane-postop-queue "test_transaction_queue"
+                          :default-directory dir
+                          :process-buffer (get-buffer-create "*emsane postop test*")
+                          :error-hooks    (list (lambda () (error "test postop q error hook called"))) )
+     )
+    ))
 
 (defun emsane-killall-scanadf ()
-  "when the process sentinel is buggy, emacs doesnt delete a finished process properly, this is for cleaning"
+  "when the process sentinel is buggy, emacs doesnt delete a
+finished process properly, this is for cleaning"
+  ;;TODO if we actually find any processes, it indicates an error, and we should be notified
   (mapcar
    (lambda (x) 
      (if (equal "scanadf" (substring (process-name x)  0 -3  ))

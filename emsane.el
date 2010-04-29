@@ -149,8 +149,11 @@
        ,(concat "History symbol for instances of " (symbol-name mname) "."))
      (defun ,(intern (concat "emsane-" (symbol-name mname) "-get")) (name)
        ,(concat "Get " (symbol-name mname) " NAME from its tracker.")
-       (eieio-instance-tracker-find name 'object-name
-                                    ',(intern (concat "emsane-" (symbol-name mname) "-list"))))))
+       (let* ((instance-get-rv (eieio-instance-tracker-find name 'object-name
+                                    ',(intern (concat "emsane-" (symbol-name mname) "-list")))))
+         (assert (not (null instance-get-rv)) "object with key %s not found" name)
+         instance-get-rv)
+       )))
 
 
 (emsane-declare-instance-get section);;inherits section interface
@@ -184,7 +187,7 @@ there can only be one emsane-tracker object with a particular name.")
   "enable instance tracking also for clones."
   ;;we want clone for eieio-instance-inheritor to execute
   ;;also clone doesnt do object init, so so it explicitly
-  (assert (stringp (car params))) ;;1st arg must be a new name!
+  (assert (stringp (car params)) "1st arg to clone must be a new name!") 
   (let ((theclone (call-next-method))) 
     (initialize-instance theclone)
     theclone))
@@ -309,10 +312,13 @@ there can only be one emsane-tracker object with a particular name.")
                           emsane-section-interface
                           )
   ((tracking-symbol :initform 'emsane-section-list)
-
+   (parent :initarg :parent
+           :initform nil
+           :documentation "parent object. this instances slots overrides the parent slots.")
    )
   "class describing a section")
 
+;;TODO parent got confused it seems
 
 ;;;value class
 (defclass emsane-section-value (emsane-section-interface)
@@ -412,15 +418,17 @@ there can only be one emsane-tracker object with a particular name.")
 ;;like image-type-options?
 
 (defmethod emsane-source-dealias ((this emsane-scanner) source-alias)
-  (let ((rv  (cadr (assoc source-alias (oref this sources)))))
-        (assert (not (null rv)) "null not allowed")
-    rv))
+  (let ((source-dealias-rv  (cadr (assoc source-alias (oref this sources)))))
+        (assert (not (null source-dealias-rv)) "null not allowed for alias")
+    source-dealias-rv))
   
 (defmethod emsane-mode-dealias ((this emsane-scanner) mode-alias)
-  (let ((rv (cadr (assoc mode-alias (oref this modes)))))
-    (assert (not (null rv)) "null not allowed")
-    rv))
+  (let ((mode-dealias-rv (cadr (assoc mode-alias (oref this modes)))))
+    (assert (not (null mode-dealias-rv)) "null not allowed for alias")
+    mode-dealias-rv))
 
+(defmethod emsane-get-buffer-create ((this emsane-scanner))
+  (get-buffer-create (format "* emsane %s *" (oref this object-name))))
 
 
 
@@ -669,17 +677,19 @@ JOB-ID is used to identify  the scan."
   (interactive)
   (unless section (setq section emsane-current-section))
   (unless job-id (setq job-id emsane-current-job-id))
-  (emsane-scan section (current-buffer) emsane-the-postop-queue)   )
+  (emsane-scan section emsane-the-postop-queue (current-buffer) )   )
 
 ;;TODO
 ;;- guard against file overwrites when scanning. ask user if overwriting is what she really wants.
 ;;  (not sure, overwriting has proven convenient)
 ;;- if a scan process is already running in buffer signal error and stop
-(defmethod emsane-scan ((this emsane-section-interface) buffer postop-queue &optional the-sentinel the-filter)
+(defmethod emsane-scan ((this emsane-section-interface)
+                        postop-queue &optional buffer the-sentinel the-filter)
   (if (emsane-process-running) (error "scanner process already running in this buffer"))
   (unless the-sentinel (setq the-sentinel 'emsane-sentinel))
   (unless the-filter (setq the-filter 'emsane-filter))
-  (assert (equal (substring (oref postop-queue :default-directory) -1) "/"));;It took a lot of time before I realized this is necessary
+  (unless buffer (setq buffer (emsane-get-buffer-create (emsane-get-scanner this)))) ;;the scanner buffer used is figured out from the scanner name by default
+  (assert (equal (substring (oref postop-queue :default-directory) -1) "/") "dir must end with /");;It took a lot of time before I realized this is necessary
   (save-excursion
     (set-buffer buffer)
     (let*
@@ -863,7 +873,7 @@ Argument STRING output from scanadf."
     (let ((moving (= (point) (process-mark proc)))
           (state (process-get proc 'emsane-process-state)))
       (save-excursion
-        (assert (not (null state)))
+        (assert (not (null state)) "state cant be nil")
         ;; Insert the text, advancing the process marker.
         (goto-char (process-mark proc))
         ;;break up string in lines and handle each

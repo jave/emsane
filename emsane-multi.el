@@ -6,22 +6,18 @@
 (emsane-declare-instance-get multi           nil "list of multi scanner configurations.")
 (emsane-declare-instance-get multi-scan-conf nil "list of scanner configurations to be used in multi  scanner setups.")
 
-(defclass emsane-multi  (eieio-named
-                         eieio-instance-tracker)
+(defclass emsane-multi  (emsane-tracker)
   ((tracking-symbol :initform 'emsane-multi-list)
    (scanner-list :initarg :scanner-list
                  :documentation "list of scanner buffer setups in this setup")
    (job :initarg :job
-           :documentation "job, book, for instance"))
+        :documentation "job, book, for instance"))
   "list of scanner configurations")
 
-(defclass emsane-multi-scan-conf  (eieio-named
-                                   eieio-instance-tracker
+(defclass emsane-multi-scan-conf  (emsane-tracker
                                    emsane-section-interface)
   ((tracking-symbol :initform 'emsane-multi-scan-conf-list)
-;;   (scanner :initarg :scanner   :documentation "scanner name") ;;in the interface now
-   (start-section :initarg :start-section  :documentation "which section to start with within the job")
-   (buffer-name :initarg :buffer-name  :documentation  "name of scanner buffer")))
+   (start-section :initarg :start-section  :documentation "which section to start with within the job")))
 
 
 
@@ -36,9 +32,7 @@ will scan different sections of the material."
   ;;- reset and reuse all old scan buffers
   (interactive (let*
                    ;;TODO this turned out rather horrible... bindings are duplicated below refactor
-                   ((v1 (completing-read "multi-job:"
-                                         (mapcar (lambda (x)  (oref x :object-name))
-                                                 emsane-multi-list)))
+                   ((v1 (emsane-do-query (emsane-query-object "multiscan" :prompt "multi-scan" :object-type 'multi)))
                     (v2 (emsane-multi-get v1));;(emsane-ask-job-id job) ;;TODO refactor job-id prompt
                     (v3 (emsane-read-job-id (emsane-job-get (oref v2 :job))))
                     )
@@ -48,14 +42,12 @@ will scan different sections of the material."
        (scanner-list (oref multi :scanner-list))
        (job (oref multi :job)))
     (mapcar (lambda (scanner)
-              (emsane-scan-start (oref scanner :buffer-name)
-                                 job
-                                 job-id
-                                 
-                                 (oref scanner :scanner)
-                                 (oref scanner :start-section) ;;TODO
+              (emsane-scan-start
+                  (oref scanner :start-section)
+
+                  job
+                  job-id
                                  )
-              ;;(set-page (oref scanner :start-page) ;;TODO
               ) scanner-list)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

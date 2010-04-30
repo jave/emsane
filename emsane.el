@@ -619,65 +619,65 @@ create it if need be."
 
 
 
-(defun emsane-scan-start (buffer-or-name
-                          job-name
-                          job-id
-                          &optional
-                          scanner-name
-                          start-section-name)
-  "Start up a new job.
-Prompt the user to feed the scanner.
-Argument BUFFER-OR-NAME is the scanadf scan buffer.
-Argument JOB-NAME is the name of the job to use.
-JOB-ID is used to identify  the scan."
-  (interactive
-   (let*
-       ((buffer-name
-         (if current-prefix-arg
-             (read-buffer "emsane buffer: "
-                          (generate-new-buffer-name "*emsane*")) ;;TODO emsane-query
-           "*emsane*"))
-        ;;TODO this vX scheme was hurried and ugly
-        (v2 (emsane-ask-job))
-        (v3 (emsane-read-job-id (emsane-job-get v2))))
-     (list buffer-name v2 v3)))
-  (cond
-   ((bufferp buffer-or-name)
-    (switch-to-buffer buffer-or-name))
-   ((stringp buffer-or-name)
-    (emsane-prepare-buffer buffer-or-name))
-   (t (error "Invalid buffer-or-name")))
+;; (defun emsane-scan-start (buffer-or-name
+;;                           job-name
+;;                           job-id
+;;                           &optional
+;;                           scanner-name
+;;                           start-section-name)
+;;   "Start up a new job.
+;; Prompt the user to feed the scanner.
+;; Argument BUFFER-OR-NAME is the scanadf scan buffer.
+;; Argument JOB-NAME is the name of the job to use.
+;; JOB-ID is used to identify  the scan."
+;;   (interactive
+;;    (let*
+;;        ((buffer-name
+;;          (if current-prefix-arg
+;;              (read-buffer "emsane buffer: "
+;;                           (generate-new-buffer-name "*emsane*")) ;;TODO emsane-query
+;;            "*emsane*"))
+;;         ;;TODO this vX scheme was hurried and ugly
+;;         (v2 (emsane-ask-job))
+;;         (v3 (emsane-read-job-id (emsane-job-get v2))))
+;;      (list buffer-name v2 v3)))
+;;   (cond
+;;    ((bufferp buffer-or-name)
+;;     (switch-to-buffer buffer-or-name))
+;;    ((stringp buffer-or-name)
+;;     (emsane-prepare-buffer buffer-or-name))
+;;    (t (error "Invalid buffer-or-name")))
 
-  (setq emsane-current-job-id job-id)
-  (setq emsane-current-job (emsane-job-get job-name))
-  (setq emsane-current-default-scanner (if scanner-name  (emsane-scanner-get scanner-name) emsane-default-scanner))
+;;   (setq emsane-current-job-id job-id)
+;;   (setq emsane-current-job (emsane-job-get job-name))
+;;   (setq emsane-current-default-scanner (if scanner-name  (emsane-scanner-get scanner-name) emsane-default-scanner))
   
-  (unless start-section-name (setq start-section-name (oref (car (emsane-get-sections (emsane-job-get job-name))) :object-name)))
-  (emsane-set-section (emsane-section-get start-section-name))
-  (emsane-last-section-slots-reset)
-  (emsane-set-mode-line))
+;;   (unless start-section-name (setq start-section-name (oref (car (emsane-get-sections (emsane-job-get job-name))) :object-name)))
+;;   (emsane-set-section (emsane-section-get start-section-name))
+;;   (emsane-last-section-slots-reset)
+;;   (emsane-set-mode-line))
 
-(defun emsane-scan-again ()
-  "Make a new scan, reuse as much settings as possible, except for the job-id."
-  (interactive)
-  (emsane-scan-start
-   (current-buffer);;TODO verify somehow
-   (oref emsane-current-job :object-name)
-   (emsane-read-job-id emsane-current-job)))
+;; (defun emsane-scan-again ()
+;;   "Make a new scan, reuse as much settings as possible, except for the job-id."
+;;   (interactive)
+;;   (emsane-scan-start
+;;    (current-buffer);;TODO verify somehow
+;;    (oref emsane-current-job :object-name)
+;;    (emsane-read-job-id emsane-current-job)))
 
-(defun emsane-scan-section-again ()
-  "rescan current section, basically just reset the pagenum"
-  (interactive)
-  (emsane-set-section  (emsane-section-get (oref emsane-current-section :object-name))))
+;; (defun emsane-scan-section-again ()
+;;   "rescan current section, basically just reset the pagenum"
+;;   (interactive)
+;;   (emsane-set-section  (emsane-section-get (oref emsane-current-section :object-name))))
 
-(defconst emsane-scan-file-suffix ".scan")
+;; (defconst emsane-scan-file-suffix ".scan")
 
 
-(defun emsane-scan-section (&optional section  startcount-info  job-id)
-  (interactive)
-  (unless section (setq section emsane-current-section))
-  (unless job-id (setq job-id emsane-current-job-id))
-  (emsane-scan section emsane-the-postop-queue (current-buffer) )   )
+;; (defun emsane-scan-section (&optional section  startcount-info  job-id)
+;;   (interactive)
+;;   (unless section (setq section emsane-current-section))
+;;   (unless job-id (setq job-id emsane-current-job-id))
+;;   (emsane-scan section emsane-the-postop-queue (current-buffer) )   )
 
 ;;TODO
 ;;- guard against file overwrites when scanning. ask user if overwriting is what she really wants.

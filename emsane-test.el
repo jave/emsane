@@ -142,6 +142,7 @@
   "basic test of emsane-scan. check the buffer for nice output"
   (progn
     (emsane-killall-scanadf);;workaround
+    (emsane-query-recall-reset)
     (let*
       ;;we need a clone since otherwise the orignal setting object will be modified
         ((dir (emsane-test-setup-jobdir "1"))
@@ -157,11 +158,11 @@
                                              :start-page 1
                         ))
          (buffer (pop-to-buffer "*emsane test scan buffer*")))
-      (emsane-scan settings    (emsane-postop-queue "test_transaction_queue"
+      (emsane-scan (emsane-process-state "test" :section settings   :postop-queue (emsane-postop-queue "test_transaction_queue"
                         :default-directory dir
                         :process-buffer (get-buffer-create "*emsane postop test*")
-                        :error-hooks    (list (lambda () (error "test postop q error hook called"))) )
-                    buffer
+                        :error-hooks    (list (lambda () (error "test postop q error hook called"))) ))
+                   nil
                    (lambda (proc msg)     (with-current-buffer (process-buffer proc)(insert (format "sentinel:%s\n" msg)) ))
                    (lambda (proc string)  (with-current-buffer (process-buffer proc) (insert (format "filter:%s\n" string))))
                    )))
@@ -173,6 +174,7 @@
 try more of the postop stuff than the basic test."
   (progn
     (emsane-killall-scanadf);;workaround
+    (emsane-query-recall-reset)
     (let*
       ;;we need a clone since otherwise the orignal setting object will be modified
         ((dir (emsane-test-setup-jobdir "2"))
@@ -194,7 +196,7 @@ try more of the postop stuff than the basic test."
                         :process-buffer (get-buffer-create "*emsane postop test*")
                         :error-hooks    (list (lambda () (error "test postop q error hook called"))) ))
          )
-      (emsane-scan settings  q  buffer
+      (emsane-scan  (emsane-process-state "test" :section settings :postop-queue q)  buffer
                    )))
    )
 

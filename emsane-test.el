@@ -112,6 +112,9 @@
 ;;handling
 ;;- use getter to access value chain and convert value etc
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;,,
+
+
 (deftest emsane-handle-slot-with-overide ()
   "check that we can clone and set the :size slot"
   (let* ((modified-default (clone emsane-the-section-defaults)))
@@ -206,6 +209,7 @@ try more of the postop stuff than the basic test."
   
   (progn
     (emsane-killall-scanadf);;workaround
+    (emsane-query-recall-reset)
     (let*
         ((dir (emsane-test-setup-jobdir "multi"))
          (ds (clone emsane-the-section-defaults "test-ds"))
@@ -215,7 +219,6 @@ try more of the postop stuff than the basic test."
          (sc3 (clone (emsane-scanner-get "test") "test3"))
          (sc4 (clone (emsane-scanner-get "test") "test4"))
          (ss (emsane-section-value "test-shared"
-                                   ;;:scanner "test";;TODO
                                    :parent ds
                                    :size "a7"
                         ))
@@ -229,19 +232,25 @@ try more of the postop stuff than the basic test."
                         :error-hooks    (list (lambda () (error "test postop q error hook called"))) ))
          )
       ;;check the value chain is ok. this test is setup noninteractive, so we should never reach the default-settings object
-      (should (equal (emsane-get-size bcs) '(74 . 105)));;    ("a7"   (74 . 105))
-      (emsane-scan bfs  q)
-      (emsane-scan bbs1  q)
-      (emsane-scan bbs2  q)
-      (emsane-scan bcs   q)
+      (should (eq (oref bcs :parent) ss))
+      (should (equal (oref (emsane-get-scanner bcs) :object-name) "test4"))
+      (should (equal (emsane-get-size bcs) '(74 . 105))) ;;is a7
+      
+      (emsane-scan (emsane-process-state "tm1" :section bfs :postop-queue q ))
+      (emsane-scan (emsane-process-state "tm2" :section bbs1 :postop-queue q ))
+      (emsane-scan (emsane-process-state "tm3" :section bbs2 :postop-queue q ))
+      (emsane-scan (emsane-process-state "tm4" :section bcs :postop-queue q ))
       ))
-   )
+  )
 
-
-
+(deftest emsane-scan-start ()
+  ;;noninteractive test of emsane-scan-start, which is the main interacvtive entrypoint
+  ;;TODO still asks for paper size
+  ;;TODO answering "size" question overwrites the "book" section...
+  (emsane-scan-start (emsane-job-get "book") "tst")
+  )
 
 (defvar emsane-test-jobdir "/tmp/emsane-test/")
-
 
 (defun emsane-test-setup-jobdir (subdir)
   (let
@@ -259,6 +268,8 @@ try more of the postop stuff than the basic test."
     ;;this will also test the default behaviour of the postop queue
     (emsane-line-handler
      (format "Scanned document %s0100-0001.scan" dir)
+     (emsane-process-state "test-proc-state"
+      :section
      (emsane-section "test-settings"
                      :operation-list nil                                             
                      :scanner "test"
@@ -271,11 +282,12 @@ try more of the postop stuff than the basic test."
                      :size "a4"
                      :start-page 1
                      )
+     :postop-queue
      (emsane-postop-queue "test_transaction_queue"
                           :default-directory dir
                           :process-buffer (get-buffer-create "*emsane postop test*")
                           :error-hooks    (list (lambda () (error "test postop q error hook called"))) )
-     )
+     ))
     ))
 
 (defun emsane-killall-scanadf ()
@@ -338,10 +350,18 @@ emsane-declare-instance-get worked as expected"
 ;;(emsane-do-query (emsane-query-string "gimmestring" :prompt "gimme string" :values '("a" "b") :default "a"))
 ;;(emsane-do-query (emsane-query-paper-size "gimmesize" :prompt "gimme paper size" :values '(("a4"   (210 . 297))    ("a5"   (148 . 210)))))
 
+;;this should work but yields nil. wtf?
+;;(emsane-get-scanner (emsane-section-get "book-body"))
+;;(oref (emsane-section-get "book-body") :scanner)
+;;(emsane-do-query (emsane-query-object "scanners" :prompt "Scanner" :object-type (quote scanner)))
+
 (deftest emsanei-getters ()
+  (progn
+    (emsane-query-recall-reset)
   (let*
-      ;;we need a clone since otherwise the orignal setting object will be modified
-      ((settings (clone            emsane-the-section-defaults "test-settings")))
+      ;;we need a clone since otherwise the orignal setting object might be modified(shouldnt atm)
+      ((settings (clone            emsane-the-section-defaults "test-settings"))
+       (org (copy-sequence emsane-the-section-defaults)))
     ;;type a4
     (should (equal '(210 . 297) (emsane-get-size           settings)))
     ;;type 242
@@ -358,7 +378,29 @@ emsane-declare-instance-get worked as expected"
     (should (equal "img" (emsane-get-file-pattern   settings)))
     ;;type djvu
     (should (equal 'djvu (emsane-get-image-type     settings)))
-))
+
+    ;;after all tests, the def list shouldnt have been modded
+    (should (equal org emsane-the-section-defaults))
+    ))
+  )
+
+(deftest emsanei-getters2 ()
+  (progn
+    (emsane-query-recall-reset)
+  (let*
+      ;;we need a clone since otherwise the orignal setting object might be modified(shouldnt atm)
+      ((settings (clone            emsane-the-section-defaults "test-settings"))
+       (org (copy-sequence emsane-the-section-defaults)))
+    ;;type test
+    (should (equal (emsane-scanner-get "test") (emsane-get-scanner  settings)))
+    ;;the 2nd time the previous answer should be recalled, no typing!
+    (should (equal (emsane-scanner-get "test") (emsane-get-scanner  settings)))    
+
+    ;;after all tests, the def list shouldnt have been modded
+    (should (equal org emsane-the-section-defaults))
+    ))
+  )
+
 
 
 

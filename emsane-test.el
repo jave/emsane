@@ -245,10 +245,8 @@ try more of the postop stuff than the basic test."
       ))
   )
 
-(deftest emsane-scan-start ()
+(deftest emsanei-scan-start ()
   ;;noninteractive test of emsane-scan-start, which is the main interacvtive entrypoint
-  ;;TODO still asks for paper size
-  ;;TODO answering "size" question overwrites the "book" section...
   (emsane-scan-start (emsane-job-get "book") "tst")
   )
 

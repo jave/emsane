@@ -712,6 +712,8 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 ;;   (unless job-id (setq job-id emsane-current-job-id))
 ;;   (emsane-scan section emsane-the-postop-queue (current-buffer) )   )
 
+
+
 (defun emsane-scan-start (job job-id &optional start-section section-overide)
   "start a new scan job."
   ;;piece together an emsane-process-state
@@ -720,21 +722,28 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
    (let*
        ((job (emsane-job-get (emsane-do-query (emsane-query-object "gimmejob" :prompt "job" :object-type 'job))))
         (job-id (emsane-read-job-id job))
-        (start-section-tmp (unless start-section (car (emsane-get-sections job)))))
-     (list job job-id start-section-tmp))
-   (let*
-       ((state (emsane-process-state job-id :job-id job-id :job job
-                                     :postop-queue nil
-                                     :section start-section
-                                     :section-overide section-overide
-                                     ))
-        (q  (emsane-postop-queue job-id
-                                 :default-directory (emsane-get-job-dir state)
-                                 :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
-        )
-     (oset state :postop-queue q)
-     (emsane-query-recall-reset)
-     (emsane-scan state))))
+        (start-section  (car (emsane-get-sections job))))
+     (list job job-id start-section)))
+  (unless start-section (setq start-section (car (emsane-get-sections job))))
+  (let*
+      ((state (emsane-process-state job-id :job-id job-id :job job
+                                    :postop-queue nil
+                                    :section start-section
+                                    :section-overide section-overide
+                                    ))
+       (q  (emsane-postop-queue job-id
+                                :default-directory (emsane-get-job-dir state)
+                                :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
+       )
+    (oset state :postop-queue q)
+    (emsane-query-recall-reset)
+    (emsane-scan state)))
+
+(defun emsane-scan-continue (state)
+  (interactive (list emsane-current-process-state))
+  (unless state (setq state emsane-current-process-state))
+  (emsane-scan state)
+  )
 
 (defmethod emsane-scan ((this emsane-process-state)
                         &optional buffer the-sentinel the-filter)
@@ -762,7 +771,8 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
          (resolution (emsane-get-resolution section))
          (dealiased-mode (emsane-get-mode section))
          (file-pattern (emsane-get-file-pattern section))
-         (startcount (emsane-get-start-page section))
+         ;;TODO unify :next-pagenumber and :start-page. it can possibly be stored in :section-overide
+         (startcount  (if (slot-boundp state :next-pagenumber) (oref state :next-pagenumber) (emsane-get-start-page section)))
          (imgtype (emsane-get-image-type section))
          (size (emsane-get-size section))
          (paperwidth (car size))
@@ -827,8 +837,10 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 
 (defvar emsane-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map "\C-m"        'emsane-scan-section)
+    (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
+
+    ;;TODO
     (define-key map "a"           'emsane-scan-again)
     (define-key map "q"           'emsane-scan-quit)
     (define-key map "r"           'emsane-scan-section-again)

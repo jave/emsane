@@ -362,6 +362,7 @@ there can only be one emsane-tracker object with a particular name.")
    (job-id :initarg :job-id)
    ;;per buffer
    (section :initarg :section)
+   (section-overide :initarg :section-overide :initform nil)   
    (subsection :initarg :subsection)
    (next-pagenumber :initarg :next-pagenumber)
    )
@@ -725,6 +726,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
        ((state (emsane-process-state job-id :job-id job-id :job job
                                      :postop-queue nil
                                      :section start-section
+                                     :section-overide section-overide
                                      ))
         (q  (emsane-postop-queue job-id
                                  :default-directory (emsane-get-job-dir state)
@@ -732,10 +734,10 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
         )
      (oset state :postop-queue q)
      (emsane-query-recall-reset)
-     (emsane-scan state nil nil nil section-overide))))
+     (emsane-scan state))))
 
 (defmethod emsane-scan ((this emsane-process-state)
-                        &optional buffer the-sentinel the-filter section-overide)
+                        &optional buffer the-sentinel the-filter)
   ;;TODO
   ;;- guard against file overwrites when scanning. ask user if overwriting is what she really wants.
   ;;  (not sure, overwriting has proven convenient)
@@ -747,9 +749,10 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (save-excursion
     (set-buffer buffer)
     (if (emsane-process-running) (error "scanner process already running in this buffer"))
+    (setq emsane-current-process-state this) ;;TODO is this the right place really?
     (let*
         ((postop-queue (oref this :postop-queue))
-         (section (if section-overide (progn (oset section-overide :parent section) section-overide) (oref this :section)))
+         (section (if (oref this :section-overide)  (progn (oset (oref this :section-overide)  :parent section) (oref this :section-overide) ) (oref this :section)))
          (job-dir (oref postop-queue :default-directory)) ;;TODO cleanup these bindings a bit, they happened due to refactoring
          (dummy-dirok (assert (equal (substring job-dir -1) "/") nil "dir must end with /"));;It took a lot of time before I realized this is necessary
          (default-directory  job-dir)

@@ -580,11 +580,6 @@ Parent directories are created if needed."
     dir))
 
 
-(defun emsane-set-section-i ()
-  (interactive)
-  ;;realy just an inconvenient wrapper TODO beautify
-  (emsane-set-section emsane-current-process-state)
-  )
 
 (defmethod emsane-set-section ((this emsane-process-state) &optional section)
   "Set section. if SECTION is nil, prompt for one."
@@ -829,13 +824,17 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mode setup
-
+(defun emsane-set-section-buffer ()
+  (interactive)
+  ;;TODO do something about these tedious wrappers, like a macro on defmethod or somesuch
+  (emsane-set-section emsane-current-process-state)
+)
 
 (defvar emsane-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
-    (define-key map "n"           'emsane-set-section-i)
+    (define-key map "n"           'emsane-set-section-buffer)
     ;;TODO
     (define-key map "a"           'emsane-scan-again)
     (define-key map "q"           'emsane-scan-quit)

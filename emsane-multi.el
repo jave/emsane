@@ -3,52 +3,46 @@
 
 ;;Here we deal with using several scanners to scan a single book, magazine etc.
 
-(emsane-declare-instance-get multi           nil "list of multi scanner configurations.")
-(emsane-declare-instance-get multi-scan-conf nil "list of scanner configurations to be used in multi  scanner setups.")
+(emsane-declare-instance-get multi-job           nil "list of multi scanner configurations.")
+(emsane-declare-instance-get multi-section nil "list of scanner configurations to be used in multi  scanner setups.")
 
-(defclass emsane-multi  (emsane-tracker)
-  ((tracking-symbol :initform 'emsane-multi-list)
-   (scanner-list :initarg :scanner-list
+
+;;WTF???
+(defclass emsane-multi-job  (emsane-tracker)
+  ((tracking-symbol :initform 'emsane-multi-job-list)
+   (multi-section-list :initarg :multi-section-list
                  :documentation "list of scanner buffer setups in this setup")
    (job :initarg :job
         :documentation "job, book, for instance"))
   "list of scanner configurations")
 
-(defclass emsane-multi-scan-conf  (emsane-tracker
+(defclass emsane-multi-section  (emsane-tracker
                                    emsane-section-interface)
-  ((tracking-symbol :initform 'emsane-multi-scan-conf-list)
-   (start-section :initarg :start-section  :documentation "which section to start with within the job")))
+  ((tracking-symbol :initform 'emsane-multi-section-list)
+   (start-section :initarg :start-section  :documentation "which section to start with within the job")
+   (section-overide :initarg :section-overide :documentation "scanner etc to be used here")))
 
 
 
-(defun emsane-multi-scan (multi-conf job-id)
+(defun emsane-multi-scan-start (multi-job job-id)
   "Scan a single project with multiple scanners. Each scanner
 will scan different sections of the material."
-  ;;TODO
-  ;;- each buffer is scanner centric, map to a scanner
-  ;;- keymap to jump quickly to each scanner buffer(1,2,3...)
-  ;;- a multi scan def, is a list of scanners, start section and pagenums for each new emsane buffer
-  ;;  book-multi, fujitsu1:book-body, fujitsu2:book-body, brother:cover-simplex
-  ;;- reset and reuse all old scan buffers
   (interactive (let*
-                   ;;TODO this turned out rather horrible... bindings are duplicated below refactor
-                   ((v1 (emsane-do-query (emsane-query-object "multiscan" :prompt "multi-scan" :object-type 'multi)))
-                    (v2 (emsane-multi-get v1));;(emsane-ask-job-id job) ;;TODO refactor job-id prompt
-                    (v3 (emsane-read-job-id (emsane-job-get (oref v2 :job))))
+                   ((mjob (emsane-multi-get (emsane-do-query (emsane-query-object "multijob" :prompt "multi-job" :object-type 'multi-job))))
+                    (jobid (emsane-read-job-id (emsane-job-get (oref mjob :job))))
                     )
-                 (list v1 v3)))
+                 (list mjob jobid)))
   (let*
-      ((multi (emsane-multi-get multi-conf))
-       (scanner-list (oref multi :scanner-list))
-       (job (oref multi :job)))
-    (mapcar (lambda (scanner)
+      ((msection-list (oref multi-job :multi-section-list))
+       (job (oref multi-job :job)))
+    (mapcar (lambda (msection)
               (emsane-scan-start
-                  (oref scanner :start-section)
-
-                  job
-                  job-id
-                                 )
-              ) scanner-list)))
+               job
+               job-id
+               (oref msection :start-section)
+               (oref msection :section-overide)
+               )
+              ) msection-list)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;TODO functions for handling a list of multi-scans in sequence,

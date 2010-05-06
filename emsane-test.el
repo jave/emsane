@@ -250,6 +250,11 @@ try more of the postop stuff than the basic test."
   (emsane-scan-start (emsane-job-get "book") "tst")
   )
 
+(deftest emsanei-multi-scan-start ()
+  ;;noninteractive test of emsane-scan-start, which is the main interacvtive entrypoint
+  (emsane-multi-scan-start  (emsane-multi-job-get "book-multi") "multi-tst") 
+  )
+
 (defvar emsane-test-jobdir "/tmp/emsane-test/")
 
 (defun emsane-test-setup-jobdir (subdir)

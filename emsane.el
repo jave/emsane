@@ -580,27 +580,23 @@ Parent directories are created if needed."
     dir))
 
 
-(defun emsane-set-section (&optional section)
-  "Set section. if SECTION is nil, prompt for one."
+(defun emsane-set-section-i ()
   (interactive)
-  (if section (setq emsane-current-section section)
-    (let* ((next-section (if emsane-current-section
-                             (emsane-next-section emsane-current-job
-                                                  emsane-current-section)))
-           (nextname (if next-section (oref next-section object-name) "")))
+  ;;realy just an inconvenient wrapper TODO beautify
+  (emsane-set-section emsane-current-process-state)
+  )
 
-      ;;TODO if next-section is nil, were at the end and should do something useful
-      ;;- start a new scan with same job but with new job-id? same as (emsane-again) so redundant?
-      ;;- just rewind and suggest the 1st section?
-      (setq section-name (completing-read (format "section[%s]: " nextname) ;;TODO should go to emsane-query
-                                          (emsane-get-section-names emsane-current-job)
-                                          nil nil nil nil
-                                          nextname))
-      (setq emsane-current-section (emsane-section-get section-name))))
-  (emsane-set-page  (emsane-get-start-page emsane-current-section))
-  (emsane-set-mode-line))
+(defmethod emsane-set-section ((this emsane-process-state) &optional section)
+  "Set section. if SECTION is nil, prompt for one."
+  ;;1st reset state
+  (slot-makeunbound this :next-pagenumber)
+  ;;then figure out the section
+  (unless section (setq section (emsane-section-get (emsane-do-query (emsane-query-string "gimmesectio" :prompt "Section" :values (oref (oref this :job) :section-list))))))
+  ;;then set it
+  (oset this :section section)
+)
 
-
+  
 (defun emsane-parse-paper-size (size-string sizes)
   "Return a size cons from SIZE-STRING.
 SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A4 in mm)."
@@ -771,7 +767,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
          (resolution (emsane-get-resolution section))
          (dealiased-mode (emsane-get-mode section))
          (file-pattern (emsane-get-file-pattern section))
-         ;;TODO unify :next-pagenumber and :start-page. it can possibly be stored in :section-overide
+         ;;TODO unify :next-pagenumber and :start-page. call it just :page. it can possibly be stored in :section-overide
          (startcount  (if (slot-boundp state :next-pagenumber) (oref state :next-pagenumber) (emsane-get-start-page section)))
          (imgtype (emsane-get-image-type section))
          (size (emsane-get-size section))
@@ -839,13 +835,13 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
-
+    (define-key map "n"           'emsane-set-section-i)
     ;;TODO
     (define-key map "a"           'emsane-scan-again)
     (define-key map "q"           'emsane-scan-quit)
     (define-key map "r"           'emsane-scan-section-again)
 
-    (define-key map "n"           'emsane-set-section)
+
 
     (define-key map "p"           'emsane-set-page)
     (define-key map "d"           'emsane-dired)

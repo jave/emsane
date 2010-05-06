@@ -766,7 +766,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
          (dealiased-mode (emsane-get-mode section))
          (file-pattern (emsane-get-file-pattern section))
          ;;TODO unify :next-pagenumber and :start-page. call it just :page. it can possibly be stored in :section-overide
-         (startcount  (if (slot-boundp state :next-pagenumber) (oref state :next-pagenumber) (emsane-get-start-page section)))
+         (startcount  (if (slot-boundp this :next-pagenumber) (oref this :next-pagenumber) (emsane-get-start-page section)))
          (imgtype (emsane-get-image-type section))
          (size (emsane-get-size section))
          (paperwidth (car size))

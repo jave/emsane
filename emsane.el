@@ -592,7 +592,7 @@ Parent directories are created if needed."
 )
 
 (defmethod emsane-set-page ((this emsane-process-state) page)
-  (oset this :next-pagenumber)
+  (oset this :next-pagenumber page)
   )
   
 (defun emsane-parse-paper-size (size-string sizes)
@@ -851,10 +851,8 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
     (define-key map "q"           'emsane-scan-quit)
     (define-key map "r"           'emsane-scan-section-again)
 
-
-
-
     (define-key map "d"           'emsane-dired)
+
     map)
   "Keymap for `emsane-mode'.")
 

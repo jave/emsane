@@ -591,6 +591,9 @@ Parent directories are created if needed."
   (oset this :section section)
 )
 
+(defmethod emsane-set-page ((this emsane-process-state) page)
+  (oset this :next-pagenumber)
+  )
   
 (defun emsane-parse-paper-size (size-string sizes)
   "Return a size cons from SIZE-STRING.
@@ -824,10 +827,16 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mode setup
+;;TODO do something about these tedious wrappers, like a macro on defmethod or somesuch
+
 (defun emsane-set-section-buffer ()
   (interactive)
-  ;;TODO do something about these tedious wrappers, like a macro on defmethod or somesuch
   (emsane-set-section emsane-current-process-state)
+)
+
+(defun emsane-set-page-buffer ()
+  (interactive)
+  (emsane-set-page emsane-current-process-state)
 )
 
 (defvar emsane-mode-map
@@ -835,6 +844,8 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
     (define-key map "n"           'emsane-set-section-buffer)
+    (define-key map "p"           'emsane-set-page-buffer)
+    
     ;;TODO
     (define-key map "a"           'emsane-scan-again)
     (define-key map "q"           'emsane-scan-quit)
@@ -842,7 +853,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 
 
 
-    (define-key map "p"           'emsane-set-page)
+
     (define-key map "d"           'emsane-dired)
     map)
   "Keymap for `emsane-mode'.")

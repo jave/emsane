@@ -532,31 +532,20 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 (defvar emsane-job-id-history)
 (defvar emsane-scanner-history)
 
-
-
-;; (defun emsane-set-mode-line ()
-;;   "Update the modeline with the current job, pagenumber, etc."
-;;   (setq mode-line-buffer-identification
-;;         (nconc (propertized-buffer-identification "%b")
-;;                (list
-;;                 (format " %s [%s %s] %s"
-;;                         emsane-current-job-id
-;;                         (if emsane-current-job (oref emsane-current-job object-name) "no job")
-;;                         (if emsane-current-job (oref emsane-current-section object-name) "no section")
-;;                         emsane-page)))))
-
 ;;TODO have a look at using force-mode-line-update
-(defun emsane-set-mode-line (section)
+(defun emsane-set-mode-line ()
   "Update the modeline with the current job, pagenumber, etc."
   (setq mode-line-buffer-identification
         (nconc (propertized-buffer-identification "%b")
-               (list
-                (format " %s [%s %s] %s"
-                        "?" ;;emsane-current-job-id
-                        "?" ;;(if emsane-current-job (oref emsane-current-job object-name) "no job")
-                        (oref section object-name)
-                        "?";;emsane-page
-                        )))))
+               (list '(:eval (emsane-mode-line-string))))))
+
+(defun emsane-mode-line-string ()
+  (format " %s [%s %s] %s"
+          (condition-case nil (oref emsane-current-process-state :job-id) (error "?"))
+          (condition-case nil (oref (oref emsane-current-process-state :job) :object-name) (error "?"))
+          (condition-case nil (oref (oref emsane-current-process-state :section) :object-name) (error "?"))
+          (condition-case nil (oref emsane-current-process-state :page)(error "?"))
+          ))
 
 (defconst emsane-scan-file-suffix ".scan")
 
@@ -710,8 +699,8 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 (define-derived-mode emsane-mode fundamental-mode
   "emsane-mode"
   "scanner frontend mode"
-  (set (make-local-variable 'emsane-current-process-state) nil) 
-  ;;(emsane-set-mode-line)
+  (set (make-local-variable 'emsane-current-process-state) nil)
+  (emsane-set-mode-line)
   )
 
 
@@ -745,7 +734,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (interactive (list (emsane-ask-subsection)))
   (setq emsane-subsection subsection)
   (emsane-set-page 1)
-  (emsane-set-mode-line))
+)
 
 (defun emsane-subsection-filepattern ()
   "used in configs when you want a subsection counter"
@@ -813,7 +802,6 @@ Argument STRING output from scanadf."
       (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) ;;this must match the scanned page, which must have a .scan suffix
       (oset state  :page
             (+ 1 (string-to-number (match-string 2 filename))))
-      ;;(emsane-set-mode-line section) ;;TODO update modeline in some intelligent way
       )
      (t );;TODO do something if line didnt match
      )))

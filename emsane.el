@@ -49,13 +49,6 @@
 ;; so djvu files can be shown in Emacs.
 
 
-;;TODO terminology cleanup/code cleanup
-;; - find better wording for:
-;;   - "section" and "jobs" or at least be consistent
-;;   - multi-scan
-;; - use "name" consistently for references, use object references rather than objects in some places
-;;   - scanjob-id -> scanjob-name ??
-;;   - some defs take scanner as arg, should be scanner-name?
 
 ;;; Code:
 
@@ -158,7 +151,7 @@
 
 
 (emsane-declare-instance-get section);;inherits section interface
-(emsane-declare-instance-get job);;TODO should inherit section interface?
+(emsane-declare-instance-get job)
 (emsane-declare-instance-get query)
 (emsane-declare-instance-get scanner)
 
@@ -168,10 +161,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; eieio class definitions
 
-;;TODO emsane-tracker isnt a stellar name, since we are named, tracked, and instance-inherited together
+;;TODO emsane-tracker isnt a stellar name, since we are named, tracked, and instance-inherited 
 (defclass emsane-tracker (eieio-named
                           eieio-instance-tracker
-                          ;;eieio-instance-inheritor;;TODO dont think i need this anymore
                           )
   (())
   "emsane-tracker works similar to eieio-instance-tracker, but it is also named, and the name works like a primary key.
@@ -261,67 +253,37 @@ there can only be one emsane-tracker object with a particular name.")
                      )
       (eval `(format (car template) ,@(emsane-read-values template))))))
 
-;;TODO
-;;"size" is the currently the most convoluted of the attributes, but the other ones might also come to use the same machinery
-;;i would like to expand the current scheme to a chain. "size" (as an example) is queried for each "section" object in the chain
-;; a section would realy only be an interface for a  bunch of settings. the chain would handle several buffers at once, with local overrides.
-;;these are the cases:
-;;- multi-scan buffers, several scan buffers with the same settings, a scan buffer might have local overrides
-;;- several independent scan buffers
-;;- conveniently allow recall of last entered local  value, but allow to re-read the size setting if needed
-
-;;list of slot that needs this handling:
-;;- size. a book can have a cover that is of a different size to the body, for hardbacks
-;;- page. in particular i want a way to force asking page for particular scan buffers in multi-scan mode
-
-;;slots that might need this:   
-;;- resolution. some pages might need higher resolution
-;;- mode. maybe only a couple of pages are color
-;;- image-type. maybe a mostly djvu document sometimes needs some other type
-;;- source. Might be convenient to override as duplex sometimes, in a mostly simplex document
-
-
-;;maybe not. these slots might be entirely different cases
-;;- scanner, file-pattern, operation-list
 
 (defclass emsane-section-interface ()
   ((size :initarg :size
-         ;;TODO :initform is autoquoted! the lambda is used as a workaround, but this syntax is going away in eieio
-         ;;TODO this is supposed to be an interface so wtf do i have a lot of initforms here at all?
-         ;;         :initform (lambda () (emsane-query-paper-size "paper-size" :prompt "Paper size" :values emsane-paper-sizes))
          :documentation "paper size")
    (page :initarg :page
-               ;;               :initform (lambda ()    (emsane-query-integer "page" :prompt "page"))
                :documentation "section start page")
    
    (scanner :initarg :scanner
-            ;;            :initform (lambda () (emsane-query-object "scanners" :prompt "Scanner" :object-type 'scanner ))
             :documentation "scanner name")   
    (source :initarg :source
-           ;;           :initform (lambda () (emsane-query-atom "sources" :prompt "Source"  :values '(duplex simplex )))
            :accessor emsane-section-get-source
            :documentation "scanner source(duplex,simplex, etc)")   
    (mode :initarg :mode
-         ;;         :initform (lambda () (emsane-query-atom "modes" :prompt "Mode" :values '(lineart color )))
          :accessor emsane-section-get-mode
          :documentation "scanner mode(lineart,color etc)")
    (resolution :initarg :resolution
-               ;;               :initform (lambda () (emsane-query-integer "resolution" :prompt "Resolution"))
                :accessor emsane-section-get-resolution
                :documentation "scan resolution in dpi")
    (file-pattern :initarg :file-pattern
-                 ;;                 :initform (lambda () (emsane-query-string  "file-pattern" :prompt "File pattern" :require-match nil))
                  :accessor emsane-section-get-file-pattern
                  :documentation "how to name the files")
    (image-type :initarg :image-type
-               ;;               :initform (lambda () (emsane-query-atom "image-types"  :prompt "Image type"  :values '(djvu jpeg )))
                :accessor emsane-section-get-image-type
                :documentation "image type(djvu,jpeg)")
-   (operation-list :initarg :operation-list :initform nil
+   (operation-list :initarg :operation-list :initform nil ;;TODO why do i have this initform in an interface?
                    :documentation "A list of operations to be used for every image scanned in this section")   
    )
   :abstract t )
 
+
+;;TODO parent should maybe go to common base class for emsane-section, and emsane-section-value
 
 
 (defclass emsane-section (emsane-tracker   ;; store instantiated objects in a list(needs special clone override)
@@ -333,8 +295,6 @@ there can only be one emsane-tracker object with a particular name.")
            :documentation "parent object. this instances slots overrides the parent slots.")
    )
   "class describing a section")
-
-;;TODO parent got confused it seems
 
 ;;;value class
 (defclass emsane-section-value (emsane-section-interface)
@@ -429,7 +389,7 @@ there can only be one emsane-tracker object with a particular name.")
       pattern
       )))
 
-;;TODO refactoe get-source and get-mode
+;;TODO refactor get-source and get-mode
 (defmethod emsane-get-source ((this emsane-section-interface))
   (let*
       ((scanner (emsane-get-scanner this)))
@@ -523,49 +483,6 @@ there can only be one emsane-tracker object with a particular name.")
 
 
 
-
-(defun emsane-set-default-scanner (scanner)
-  "set the default scanner in the buffer. the actual scanner used
-might still be modified by section settings"
-  (interactive
-   ;;TODO check if scanner is consisten with job etc, (obj or name reference?)
-   (list (emsane-ask-scanner)))
-  (setq emsane-current-default-scanner scanner))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; (defun emsane-setup-from-other-buffer (buffer newpagenum newscanner)
-;;   "copy settings from another emsane buffer BUFFER.
-;; This is useful when you work with several scanner buffers. Therefore the
-;; scanner setting in the other buffer is not copied, nor the pagenum.
-;; These are asked for
-;; "
-;;   (interactive
-;;    (list (emsane-ask-buffer)
-;;          (emsane-ask-pagenum)
-;;          (emsane-ask-scanner))
-;;    )
-;;   (let ((a) 
-;;         (b) 
-;;         (d))
-;;     (save-excursion
-;;       (set-buffer buffer)
-;;       ;;copy locals. 
-;;       (setq a emsane-current-job) 
-;;       (setq b emsane-current-section) 
-;;       (setq d emsane-current-job-id)
-;;       )
-;;     (setq emsane-current-job a) 
-;;     (setq emsane-current-section b) 
-;;     (setq emsane-current-job-id d)
-;;     ;;scanner and pagenum must be handled specially
-;;     (setq emsane-page newpagenum)
-;;     (setq emsane-current-default-scanner newscanner)
-
-;;     (emsane-set-mode-line)))
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defmethod emsane-get-job-dir  ((this emsane-process-state))
@@ -594,7 +511,10 @@ Parent directories are created if needed."
 (defmethod emsane-set-page ((this emsane-process-state) page)
   (oset this :page page)
   )
-  
+
+(defmethod emsane-dired ((this emsane-process-state) )
+  (dired (emsane-get-job-dir emsane-process-state)))
+
 (defun emsane-parse-paper-size (size-string sizes)
   "Return a size cons from SIZE-STRING.
 SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A4 in mm)."
@@ -638,69 +558,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                         "?";;emsane-page
                         )))))
 
-
-
-;; (defun emsane-scan-start (buffer-or-name
-;;                           job-name
-;;                           job-id
-;;                           &optional
-;;                           scanner-name
-;;                           start-section-name)
-;;   "Start up a new job.
-;; Prompt the user to feed the scanner.
-;; Argument BUFFER-OR-NAME is the scanadf scan buffer.
-;; Argument JOB-NAME is the name of the job to use.
-;; JOB-ID is used to identify  the scan."
-;;   (interactive
-;;    (let*
-;;        ((buffer-name
-;;          (if current-prefix-arg
-;;              (read-buffer "emsane buffer: "
-;;                           (generate-new-buffer-name "*emsane*")) ;;TODO emsane-query
-;;            "*emsane*"))
-;;         ;;TODO this vX scheme was hurried and ugly
-;;         (v2 (emsane-ask-job))
-;;         (v3 (emsane-read-job-id (emsane-job-get v2))))
-;;      (list buffer-name v2 v3)))
-;;   (cond
-;;    ((bufferp buffer-or-name)
-;;     (switch-to-buffer buffer-or-name))
-;;    ((stringp buffer-or-name)
-;;     (emsane-prepare-buffer buffer-or-name))
-;;    (t (error "Invalid buffer-or-name")))
-
-;; ;;  (setq emsane-current-job-id job-id)
-;; ;;  (setq emsane-current-job (emsane-job-get job-name))
-;; ;;  (setq emsane-current-default-scanner (if scanner-name  (emsane-scanner-get scanner-name) emsane-default-scanner))
-
-;;   (unless start-section-name (setq start-section-name (oref (car (emsane-get-sections (emsane-job-get job-name))) :object-name)))
-;;   (emsane-set-section (emsane-section-get start-section-name))
-;; ;;  (emsane-last-section-slots-reset)
-;;   (emsane-set-mode-line))
-
-;; (defun emsane-scan-again ()
-;;   "Make a new scan, reuse as much settings as possible, except for the job-id."
-;;   (interactive)
-;;   (emsane-scan-start
-;;    (current-buffer);;TODO verify somehow
-;;    (oref emsane-current-job :object-name)
-;;    (emsane-read-job-id emsane-current-job)))
-
-;; (defun emsane-scan-section-again ()
-;;   "rescan current section, basically just reset the pagenum"
-;;   (interactive)
-;;   (emsane-set-section  (emsane-section-get (oref emsane-current-section :object-name))))
-
 (defconst emsane-scan-file-suffix ".scan")
-
-
-;; (defun emsane-scan-section (&optional section  startcount-info  job-id)
-;;   (interactive)
-;;   (unless section (setq section emsane-current-section))
-;;   (unless job-id (setq job-id emsane-current-job-id))
-;;   (emsane-scan section emsane-the-postop-queue (current-buffer) )   )
-
-
 
 (defun emsane-scan-start (job job-id &optional start-section section-overide)
   "start a new scan job."
@@ -833,20 +691,19 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (emsane-set-page emsane-current-process-state)
 )
 
+(defun emsane-dired-buffer ()
+  "Dired the current scan project."
+  (interactive)
+  (emsane-dires emsane-current-process-state)
+
 (defvar emsane-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
     (define-key map "n"           'emsane-set-section-buffer)
     (define-key map "p"           'emsane-set-page-buffer)
-    
-    ;;TODO
-    (define-key map "a"           'emsane-scan-again)
+    (define-key map "d"           'emsane-dired-buffer)
     (define-key map "q"           'emsane-scan-quit)
-    (define-key map "r"           'emsane-scan-section-again)
-
-    (define-key map "d"           'emsane-dired)
-
     map)
   "Keymap for `emsane-mode'.")
 
@@ -857,13 +714,6 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   ;;(emsane-set-mode-line)
   )
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; dired support
-
-(defun emsane-dired ()
-  "Dired the current scan project."
-  (interactive)
-  (dired (emsane-get-job-dir emsane-current-job)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; process control support
@@ -879,9 +729,9 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
     (error nil)))
 
 
-
 (defun emsane-scan-quit ()
   "quit running scan process"
+  ;;TODO should also deal with buffer process state
   (interactive)
   (if (emsane-process-running) 
       (delete-process (current-buffer))))
@@ -994,14 +844,7 @@ Argument STRING output from scanadf."
   )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; setup the postprocess queue
 ;; postprocessing support
-
-;; ;;TODO only 1 queue atm. if you have a octo core or something youd like more queues
-;; (setq emsane-the-postop-queue  (emsane-postop-queue "transaction_queue"
-;;                                                     :default-directory nil ;;must be initialized to run
-;;                                                     :process-buffer (get-buffer-create "*emsane postop*")
-;;                                                     :error-hooks    (list (lambda () (message "postop q error hook called"))) ))
 
 (defvar emsane-image-type-suffixes
   '((jpg-gray jpg) (jpg-color jpg)(djvu-color djvu)))
@@ -1081,28 +924,6 @@ FILENAME is currently assumed have a .scan suffix"
    (emsane-mkpostop-convert )
    (emsane-postop-simple-shell-operation "dust"  :operation-shell-command "dust ${SCANFILE}.dust"))
   )
-
-;;;TODO this is from a previous version of postop code, so it needs to be converted
-(defun emsane-unpaper-args-mb (filename)
-  "An unpaper argument creator for booklets made from folded A4 sheets.
-When scanning remove staples and unfold.  FILENAME is the file to unpaper."
-  ;;TODO this isnt tested lately
-  (let*
-      ((evenpage (evenp emsane-page))
-       (angle (if evenpage;;we are postprocessing so pagenumber is current
-                  "90" "-90"))
-       (p1 (if evenpage "a" "b") ) ;; we need to swap out page num sequence for odd/even pages
-       (p2 (if evenpage "b" "a") )
-       (cmd (list  "--overwrite"
-                   ;;                   "--size" "a4"
-                   "--layout" "double"
-                   "--output-pages" "2"
-                   "--pre-rotate"  angle
-                   "--output-file-sequence" (concat filename "-" p1 ".pnm") (concat  filename "-" p2 ".pnm")
-                   "--input-file-sequence" filename )))
-    (message (format "unpaper args:%s" cmd))
-    cmd))
-
 
 (provide 'emsane)
 

@@ -258,7 +258,7 @@ there can only be one emsane-tracker object with a particular name.")
   ((size :initarg :size
          :documentation "paper size")
    (page :initarg :page
-               :documentation "section start page")
+         :documentation "section start page")
    
    (scanner :initarg :scanner
             :documentation "scanner name")   
@@ -506,14 +506,14 @@ Parent directories are created if needed."
   (unless section (setq section (emsane-section-get (emsane-do-query (emsane-query-string "gimmesectio" :prompt "Section" :values (oref (oref this :job) :section-list))))))
   ;;then set it
   (oset this :section section)
-)
+  )
 
 (defmethod emsane-set-page ((this emsane-process-state) page)
   (oset this :page page)
   )
 
 (defmethod emsane-dired ((this emsane-process-state) )
-  (dired (emsane-get-job-dir emsane-process-state)))
+  (dired (emsane-get-job-dir emsane-current-process-state)))
 
 (defun emsane-parse-paper-size (size-string sizes)
   "Return a size cons from SIZE-STRING.
@@ -673,17 +673,17 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 (defun emsane-set-section-buffer ()
   (interactive)
   (emsane-set-section emsane-current-process-state)
-)
+  )
 
 (defun emsane-set-page-buffer ()
   (interactive)
   (emsane-set-page emsane-current-process-state)
-)
+  )
 
 (defun emsane-dired-buffer ()
   "Dired the current scan project."
   (interactive)
-  (emsane-dires emsane-current-process-state)
+  (emsane-dired emsane-current-process-state))
 
 (defvar emsane-mode-map
   (let ((map (make-sparse-keymap)))
@@ -734,7 +734,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (interactive (list (emsane-ask-subsection)))
   (setq emsane-subsection subsection)
   (emsane-set-page 1)
-)
+  )
 
 (defun emsane-subsection-filepattern ()
   "used in configs when you want a subsection counter"
@@ -776,8 +776,8 @@ Argument STRING output from scanadf."
         (goto-char (process-mark proc))
         ;;break up string in lines and handle each
         (mapcar (lambda (line) (emsane-line-handler line
-                                               state
-                                               )) (split-string string "\n" t))
+                                                    state
+                                                    )) (split-string string "\n" t))
         (insert (format "filter:<<%s>>\n" ;;TODO should be possible to visit image files in the scanadf buffer!
                         (substring string 0 -1)
                         ))

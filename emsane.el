@@ -272,7 +272,7 @@ there can only be one emsane-tracker object with a particular name.")
 
 ;;list of slot that needs this handling:
 ;;- size. a book can have a cover that is of a different size to the body, for hardbacks
-;;- start-page. in particular i want a way to force asking start-page for particular scan buffers in multi-scan mode
+;;- page. in particular i want a way to force asking page for particular scan buffers in multi-scan mode
 
 ;;slots that might need this:   
 ;;- resolution. some pages might need higher resolution
@@ -290,8 +290,8 @@ there can only be one emsane-tracker object with a particular name.")
          ;;TODO this is supposed to be an interface so wtf do i have a lot of initforms here at all?
          ;;         :initform (lambda () (emsane-query-paper-size "paper-size" :prompt "Paper size" :values emsane-paper-sizes))
          :documentation "paper size")
-   (start-page :initarg :start-page
-               ;;               :initform (lambda ()    (emsane-query-integer "startpage" :prompt "Start-page"))
+   (page :initarg :page
+               ;;               :initform (lambda ()    (emsane-query-integer "page" :prompt "page"))
                :documentation "section start page")
    
    (scanner :initarg :scanner
@@ -345,7 +345,7 @@ there can only be one emsane-tracker object with a particular name.")
 (defvar emsane-the-section-defaults
   (emsane-section-value "the-section-defaults"
                         :size (emsane-query-paper-size "paper-size" :prompt "Paper size" :values emsane-paper-sizes)
-                        :start-page   (emsane-query-integer "startpage" :prompt "Start-page")
+                        :page   (emsane-query-integer "page" :prompt "page")
                         :scanner (emsane-query-object "scanners" :prompt "Scanner" :object-type 'scanner )
                         :source  (emsane-query-atom "sources" :prompt "Source"  :values '(duplex simplex ))
                         :mode    (emsane-query-atom "modes" :prompt "Mode" :values '(lineart color ))
@@ -364,7 +364,7 @@ there can only be one emsane-tracker object with a particular name.")
    (section :initarg :section)
    (section-overide :initarg :section-overide :initform nil)   
    (subsection :initarg :subsection)
-   (next-pagenumber :initarg :next-pagenumber)
+   (page :initarg :page)
    )
   )
 
@@ -413,12 +413,12 @@ there can only be one emsane-tracker object with a particular name.")
   (unless sizes (setq sizes emsane-paper-sizes))
   (emsane-parse-paper-size (emsane-handle-slot this 'size) sizes))
 
-(defmethod emsane-get-start-page ((this emsane-section-interface))
-  "accessor for a sections start-page slot, supports prompting and recall"
+(defmethod emsane-get-page ((this emsane-section-interface))
+  "accessor for a sections page slot, supports prompting and recall"
   (let*
-      ((startnum (emsane-handle-slot this 'start-page)))
+      ((startnum (emsane-handle-slot this 'page)))
     (cond
-     ((eq 'continue startnum)  emsane-next-pagenumber)
+     ((eq 'continue startnum)  emsane-page)
      (t startnum))))
 
 (defmethod emsane-get-file-pattern ((this emsane-section-interface))
@@ -559,7 +559,7 @@ might still be modified by section settings"
 ;;     (setq emsane-current-section b) 
 ;;     (setq emsane-current-job-id d)
 ;;     ;;scanner and pagenum must be handled specially
-;;     (setq emsane-next-pagenumber newpagenum)
+;;     (setq emsane-page newpagenum)
 ;;     (setq emsane-current-default-scanner newscanner)
 
 ;;     (emsane-set-mode-line)))
@@ -584,7 +584,7 @@ Parent directories are created if needed."
 (defmethod emsane-set-section ((this emsane-process-state) &optional section)
   "Set section. if SECTION is nil, prompt for one."
   ;;1st reset state
-  (slot-makeunbound this :next-pagenumber)
+  (slot-makeunbound this :page)
   ;;then figure out the section
   (unless section (setq section (emsane-section-get (emsane-do-query (emsane-query-string "gimmesectio" :prompt "Section" :values (oref (oref this :job) :section-list))))))
   ;;then set it
@@ -592,7 +592,7 @@ Parent directories are created if needed."
 )
 
 (defmethod emsane-set-page ((this emsane-process-state) page)
-  (oset this :next-pagenumber page)
+  (oset this :page page)
   )
   
 (defun emsane-parse-paper-size (size-string sizes)
@@ -614,12 +614,6 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 
 
 
-(defun emsane-set-page (pagenum)
-  "Set next scan to begin with PAGENUM in the filename."
-  (interactive (list (emsane-ask-pagenum)))
-  (setq emsane-next-pagenumber pagenum)
-  (emsane-set-mode-line))
-
 ;; (defun emsane-set-mode-line ()
 ;;   "Update the modeline with the current job, pagenumber, etc."
 ;;   (setq mode-line-buffer-identification
@@ -629,7 +623,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 ;;                         emsane-current-job-id
 ;;                         (if emsane-current-job (oref emsane-current-job object-name) "no job")
 ;;                         (if emsane-current-job (oref emsane-current-section object-name) "no section")
-;;                         emsane-next-pagenumber)))))
+;;                         emsane-page)))))
 
 ;;TODO have a look at using force-mode-line-update
 (defun emsane-set-mode-line (section)
@@ -641,7 +635,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                         "?" ;;emsane-current-job-id
                         "?" ;;(if emsane-current-job (oref emsane-current-job object-name) "no job")
                         (oref section object-name)
-                        "?";;emsane-next-pagenumber
+                        "?";;emsane-page
                         )))))
 
 
@@ -765,8 +759,8 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
          (resolution (emsane-get-resolution section))
          (dealiased-mode (emsane-get-mode section))
          (file-pattern (emsane-get-file-pattern section))
-         ;;TODO unify :next-pagenumber and :start-page. call it just :page. it can possibly be stored in :section-overide
-         (startcount  (if (slot-boundp this :next-pagenumber) (oref this :next-pagenumber) (emsane-get-start-page section)))
+         ;;TODO unify :page and :page. call it just :page. it can possibly be stored in :section-overide
+         (startcount  (if (slot-boundp this :page) (oref this :page) (emsane-get-page section)))
          (imgtype (emsane-get-image-type section))
          (size (emsane-get-size section))
          (paperwidth (car size))
@@ -967,7 +961,7 @@ Argument STRING output from scanadf."
       (setq filename (match-string 1 string))
       (emsane-line-default-postop filename)
       (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) ;;this must match the scanned page, which must have a .scan suffix
-      (oset state  :next-pagenumber
+      (oset state  :page
             (+ 1 (string-to-number (match-string 2 filename))))
       ;;(emsane-set-mode-line section) ;;TODO update modeline in some intelligent way
       )
@@ -1094,7 +1088,7 @@ FILENAME is currently assumed have a .scan suffix"
 When scanning remove staples and unfold.  FILENAME is the file to unpaper."
   ;;TODO this isnt tested lately
   (let*
-      ((evenpage (evenp emsane-next-pagenumber))
+      ((evenpage (evenp emsane-page))
        (angle (if evenpage;;we are postprocessing so pagenumber is current
                   "90" "-90"))
        (p1 (if evenpage "a" "b") ) ;; we need to swap out page num sequence for odd/even pages

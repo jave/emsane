@@ -127,11 +127,11 @@
          (parent (clone emsane-the-section-defaults "parent")  ))
     (oset child :size "a4")
     (oset parent :size "a3")
-    (oset parent :start-page 242)
-    (slot-makeunbound child :start-page)
+    (oset parent :page 242)
+    (slot-makeunbound child :page)
     (oset child :parent parent)
     (should (equal "a4" (emsane-handle-slot child :size))) ;;we get a4 from the child here and not 210x297, nor a3
-    (should (equal 242 (emsane-handle-slot child :start-page))) ;;we should get the parent value since the child doesnt care
+    (should (equal 242 (emsane-handle-slot child :page))) ;;we should get the parent value since the child doesnt care
     ;;now test the getters, who wrap handle-slot and provides further processing
     (should (equal '(210 . 297) (emsane-get-size child)));;get-size parses a4 to (210x297)
     ))
@@ -155,7 +155,7 @@
                                              :file-pattern "0100-%04d"
                                              :image-type 'jpg
                                              :size "a4"
-                                             :start-page 1
+                                             :page 1
                         ))
          (buffer (pop-to-buffer "*emsane test scan buffer*")))
       (emsane-scan (emsane-process-state "test" :section settings   :postop-queue (emsane-postop-queue "test_transaction_queue"
@@ -188,7 +188,7 @@ try more of the postop stuff than the basic test."
                                              :file-pattern "0100-%04d"
                                              :image-type 'jpg
                                              :size "a4"
-                                             :start-page 1
+                                             :page 1
                         ))
          (buffer (pop-to-buffer "*emsane test scan buffer 2*"))
          (q   (emsane-postop-queue "test_transaction_queue"
@@ -225,8 +225,8 @@ try more of the postop stuff than the basic test."
                                    :size "a7"
                         ))
          (bfs (clone (emsane-section-get "book-front-matter") "test-bf" :parent ss :scanner sc1))
-         (bbs1 (clone (emsane-section-get "book-body") "test-bb1" :parent ss :start-page 1 :scanner sc2))
-         (bbs2 (clone (emsane-section-get "book-body") "test-bb2" :parent ss :start-page 100 :scanner sc3))
+         (bbs1 (clone (emsane-section-get "book-body") "test-bb1" :parent ss :page 1 :scanner sc2))
+         (bbs2 (clone (emsane-section-get "book-body") "test-bb2" :parent ss :page 100 :scanner sc3))
          (bcs (clone (emsane-section-get "book-cover-simplex") "test-bc" :parent ss :scanner sc4))
          (q   (emsane-postop-queue "test_transaction_queue"
                         :default-directory dir
@@ -285,7 +285,7 @@ try more of the postop stuff than the basic test."
                      :file-pattern "0100-%04d"
                      :image-type 'jpg
                      :size "a4"
-                     :start-page 1
+                     :page 1
                      )
      :postop-queue
      (emsane-postop-queue "test_transaction_queue"
@@ -370,7 +370,7 @@ emsane-declare-instance-get worked as expected"
     ;;type a4
     (should (equal '(210 . 297) (emsane-get-size           settings)))
     ;;type 242
-    (should (equal 242 (emsane-get-start-page     settings)))
+    (should (equal 242 (emsane-get-page     settings)))
     ;;type test
     (should (equal (emsane-scanner-get "test") (emsane-get-scanner  settings)))
     ;;type test RET duplex

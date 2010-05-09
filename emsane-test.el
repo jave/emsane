@@ -40,13 +40,34 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;queue stuff
 (deftest emsane-postop-queue-push-pop ()
-  ;;simple push/pop test
+  ;;simple push/pop test. doesnt matter if lifo or fifo, should always work
   (let*
       ((q  (emsane-postop-queue "tq"))
        (pushed 'a)
        (push-r (emsane-postop-push q pushed))
-       (poped (emsane-postop-pop q)))
+       (poped (emsane-postop-dequeue q)))
     (should (equal pushed poped))))
+
+(deftest emsane-postop-queue-push-pop ()
+  ;; push/pop test. try fifo:ness
+  (let*
+      ((q  (emsane-postop-queue "tq"))
+       (pushed1 'a)
+       (pushed2 'b)
+       (push-r1 (emsane-postop-push q pushed1))
+       (push-r2 (emsane-postop-push q pushed2))
+       (poped1)
+       (poped2)
+       )
+    (should (emsane-postop-hasnext q))
+    (setq poped1 (emsane-postop-dequeue q))
+    (should (equal pushed1 poped1))
+    (should (emsane-postop-hasnext q))
+    (setq poped2 (emsane-postop-dequeue q))    
+    (should (equal pushed2 poped2))
+    (should-not (emsane-postop-hasnext q))
+    (should-error (emsane-postop-dequeue q))
+    ))
 
 
 (deftest emsane-postop-donext-safe ()
@@ -55,6 +76,9 @@
       ((q  (emsane-postop-queue "tq"))
        (emsane-postop-donext q)
        (emsane-postop-donext q))))
+
+
+
 
 (deftest emsane-postop-donext-once ()
   ;;make a queue, push a tx with 1 op, verify it executed
@@ -71,7 +95,10 @@
     (oset q :default-directory "/tmp")
     (emsane-postop-go q)
     ;;(assert-equal  'ok (oref tx :result))
-    ))
+    )
+
+  )
+
 
 (deftest emsane-postop-donext-shell ()
   ;;make a queue, push a shell tx, verify it executed
@@ -291,6 +318,7 @@ try more of the postop stuff than the basic test."
      (emsane-postop-queue "test_transaction_queue"
                           :default-directory dir
                           :process-buffer (get-buffer-create "*emsane postop test*")
+                          :fifo '()
                           :error-hooks    (list (lambda () (error "test postop q error hook called"))) )
      ))
     ))

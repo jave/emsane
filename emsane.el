@@ -575,6 +575,23 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
     (emsane-query-recall-reset)
     (emsane-scan state)))
 
+
+(defmethod emsane-scan-again ((this emsane-process-state) )
+  ;;TODO would be cool if (interactive) could have a spec to pick up "this" from buffer
+  (oset this :job-id (emsane-read-job-id (oref this :job)))
+  (let*
+      ((q (emsane-postop-queue (oref this :job-id)
+                                :default-directory (emsane-get-job-dir this)
+                                :process-buffer (get-buffer-create (format "*emsane postop %s*" (oref this :job-id))))))
+    (oset this :postop-queue q)
+    (emsane-scan this)))
+
+(defun emsane-scan-again-buffer ()
+  (interactive)
+  (emsane-scan-again emsane-current-process-state)
+  )
+
+
 (defun emsane-scan-continue (state)
   (interactive (list emsane-current-process-state))
   (unless state (setq state emsane-current-process-state))
@@ -685,6 +702,9 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   "Dired the current scan project."
   (interactive)
   (emsane-dired emsane-current-process-state))
+
+
+
 
 (defvar emsane-mode-map
   (let ((map (make-sparse-keymap)))

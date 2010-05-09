@@ -508,7 +508,8 @@ Parent directories are created if needed."
   (oset this :section section)
   )
 
-(defmethod emsane-set-page ((this emsane-process-state) page)
+(defmethod emsane-set-page ((this emsane-process-state) &optional page)
+  (unless page (setq page (read-number "page:")))
   (oset this :page page)
   )
 

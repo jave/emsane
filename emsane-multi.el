@@ -24,7 +24,7 @@
 
 
 
-(defun emsane-multi-scan-start (multi-job job-id)
+(defun emsane-multi-scan-start (multi-job job-id &optional section-overide)
   "Scan a single project with multiple scanners. Each scanner
 will scan different sections of the material."
   (interactive (let*
@@ -43,6 +43,12 @@ will scan different sections of the material."
                (oref msection :section-overide)
                )
               ) msection-list)))
+
+;; (defun emsane-section-chain (&rest sections)
+;;   "gimme a bunch of sections and chain them together"
+;;   (let* ((rv))
+;;     (while sections
+;;       (setq rv 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;TODO functions for handling a list of multi-scans in sequence,

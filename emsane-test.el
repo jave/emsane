@@ -83,18 +83,20 @@
 (deftest emsane-postop-donext-once ()
   ;;make a queue, push a tx with 1 op, verify it executed
   (let*
-      ((q  (emsane-postop-queue "tq"))
+      ((varname 'RESULT)
+       (result "OK")
+
+       (q  (emsane-postop-queue "tq"))
        (tx (emsane-postop-transaction "tx"))
        (op (emsane-postop-lisp-operation "op"
                                          :operation-lambda
-                                         (lambda (tx q) (message "im an op and im ok")
-                                           ;;(oset tx :result 'ok)
+                                         (lambda (tx q) (emsane-postop-setenv tx varname result)
                                            ))))
     (emsane-postop-push tx op)
     (emsane-postop-push q tx)
     (oset q :default-directory "/tmp")
     (emsane-postop-go q)
-    ;;(assert-equal  'ok (oref tx :result))
+    (should (equal  result (emsane-postop-getenv tx varname)))
     )
 
   )
@@ -118,9 +120,8 @@
     (emsane-postop-push q tx)
     (oset q :process-buffer "*emsane postop*")
     (oset q :default-directory  "/tmp")
-    ;;(oset tx :result "w00t")
     (emsane-postop-go q)
-    ;;w00tw00t should appear in the postproc buf
+    ;;"w00tw00t" and "W00T ... AAH" should appear in the postproc buf TODO verify this
     ))
 
 (deftest emsane-postop-tx-env ()
@@ -196,7 +197,7 @@
    )
 
 
-(deftest emsane-scan-2 ()
+(deftest emsaneBROKEN-scan-2 ()
   "slightly less basic test of emsane-scan. check the buffer for nice output.
 try more of the postop stuff than the basic test."
   (progn
@@ -217,17 +218,17 @@ try more of the postop stuff than the basic test."
                                              :size "a4"
                                              :page 1
                         ))
-         (buffer (pop-to-buffer "*emsane test scan buffer 2*"))
+         (buffer (pop-to-buffer "*emsane emsane-scan-2*"))
          (q   (emsane-postop-queue "test_transaction_queue"
                         :default-directory dir
-                        :process-buffer (get-buffer-create "*emsane postop test*")
-                        :error-hooks    (list (lambda () (error "test postop q error hook called"))) ))
+                        :process-buffer (get-buffer-create "*emsane-scan-2 postop*")
+                        :error-hooks    (list (lambda () (message "deftest emsane-scan-2 postop q error hook called"))) ))
          )
       (emsane-scan  (emsane-process-state "test" :section settings :postop-queue q)  buffer
                    )))
    )
 
-(deftest emsane-scan-multi ()
+(deftest emsaneBROKEN-scan-multi ()
   " test 3 scanjobs scanning at the same time in the same dir, different sections"
   ;;we will need a number of settings
   ;; default-settings -- shared-settings +- book-frontmatter -- buffer1
@@ -258,7 +259,7 @@ try more of the postop stuff than the basic test."
          (q   (emsane-postop-queue "test_transaction_queue"
                         :default-directory dir
                         :process-buffer (get-buffer-create "*emsane postop test multi*")
-                        :error-hooks    (list (lambda () (error "test postop q error hook called"))) ))
+                        :error-hooks    (list (lambda () (error "deftest emsane-scan-multi postop q error hook called"))) ))
          )
       ;;check the value chain is ok. this test is setup noninteractive, so we should never reach the default-settings object
       (should (eq (oref bcs :parent) ss))
@@ -298,29 +299,30 @@ try more of the postop stuff than the basic test."
     (copy-file emsane-test-scanfile dir)
     ;;simulate the line handler receving a scaned file notification.
     ;;this will also test the default behaviour of the postop queue
+    ;;TODO actualy verify it does the right thing
     (emsane-line-handler
      (format "Scanned document %s0100-0001.scan" dir)
      (emsane-process-state "test-proc-state"
-      :section
-     (emsane-section "test-settings"
-                     :operation-list nil                                             
-                     :scanner "test"
-                     :source 'duplex
-                     :mode 'color
-                     :resolution 300
-                     ;;:parent nil ;;dont mess up this test with too much deps
-                     :file-pattern "0100-%04d"
-                     :image-type 'jpg
-                     :size "a4"
-                     :page 1
-                     )
-     :postop-queue
-     (emsane-postop-queue "test_transaction_queue"
-                          :default-directory dir
-                          :process-buffer (get-buffer-create "*emsane postop test*")
-                          :fifo '()
-                          :error-hooks    (list (lambda () (error "test postop q error hook called"))) )
-     ))
+                           :section
+                           (emsane-section "test-settings"
+                                           :operation-list nil                                             
+                                           :scanner "test"
+                                           :source 'duplex
+                                           :mode 'color
+                                           :resolution 300
+                                           ;;:parent nil ;;dont mess up this test with too much deps
+                                           :file-pattern "0100-%04d"
+                                           :image-type 'jpg
+                                           :size "a4"
+                                           :page 1
+                                           )
+                           :postop-queue
+                           (emsane-postop-queue "test_transaction_queue"
+                                                :default-directory dir
+                                                :process-buffer (get-buffer-create "*emsane postop test*")
+                                                :fifo '()
+                                                :error-hooks    (list (lambda () (error "test postop q error hook called"))))
+                           ))
     ))
 
 (defun emsane-killall-scanadf ()
@@ -330,9 +332,9 @@ finished process properly, this is for cleaning"
   (mapcar
    (lambda (x) 
      (if (equal "scanadf" (substring (process-name x)  0 -3  ))
-                   (progn
-                     (delete-process (process-name x))
-                     )))
+         (progn
+           (delete-process (process-name x))
+           )))
    (process-list)))
 
 (deftest emsane-process-running ()

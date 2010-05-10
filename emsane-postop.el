@@ -149,18 +149,6 @@
     rv))
 
 
-(defmethod emsane-postop-pop ((this emsane-postop-fifo))
-  "pop object from front of queue"
-  (unless (emsane-postop-hasnext this) (error "poping an empty queue is bad"))
-  (unless (oref this :fifo) nil)
-  (let
-      ((rv (car (oref this :fifo))))
-    (oset this :fifo
-          (cdr   (oref this :fifo)))
-    rv))
-
-
-
 (defmethod emsane-postop-hasnext ((this emsane-postop-fifo))
   "empty?"
   (not (null (oref this :fifo))))
@@ -195,7 +183,6 @@ if the queue is empty return nil."
   ;;TODO the method should always be safe to call, regardless of the queue state, ensure this
   ;;TODO delete the transaction if the operation fails.
   ;;should almost work, because if crash, we dont push back th eop
-  ;;TODO a q and a tx isnt the same thing, so for clarity this method should only apply to a q
   (if (oref this state) (error "the queue is unwell:" (oref this state)))
   (if (emsane-postop-hasnext this)
       (let*
@@ -203,7 +190,7 @@ if the queue is empty return nil."
            (op))
         (if (emsane-postop-hasnext tx)
             (progn
-              (setq op  (emsane-postop-pop tx))
+              (setq op  (emsane-postop-dequeue tx))
               (emsane-postop-exec op tx this)
               (emsane-postop-push this tx))
           (emsane-postop-donext this)))))

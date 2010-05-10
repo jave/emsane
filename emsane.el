@@ -804,7 +804,7 @@ Argument STRING output from scanadf."
     (cond
      ((string-match "Scanned document \\(.*\\)" string) ;;a string emitted by scanadf
       (setq filename (match-string 1 string))
-      (emsane-line-default-postop filename)
+      (emsane-line-default-postop filename postop-queue)
       (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) ;;this must match the scanned page, which must have a .scan suffix
       (oset state  :page
             (+ 1 (string-to-number (match-string 2 filename))))
@@ -812,8 +812,7 @@ Argument STRING output from scanadf."
      (t );;TODO do something if line didnt match
      )))
 
-(defun emsane-line-default-postop (filename)
-  ;;TODO uhm... this is tightly coupled to emsane-line-handler through dynamic scope lite bindings. dunno how that happened actually
+(defun emsane-line-default-postop (filename postop-queue)
   ;;begin tx
   (setq tx (emsane-postop-transaction "tx"))
   (emsane-postop-setenv tx 'SCANFILE filename)
@@ -821,21 +820,19 @@ Argument STRING output from scanadf."
   (if (null op-list) ;;nil currently means do a default conversion
       (progn
         ;;push a default op:s for now. these converts and deletes original.
-        ;;since ops are pushed delete goes before convert which is harder to read TODO add prepend operation
+        (emsane-postop-push tx (emsane-mkpostop-convert section))        
         (emsane-postop-push tx (emsane-postop-lisp-operation "op"
                                                              :operation-lambda
-                                                             (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE)))))
-        (emsane-postop-push tx (emsane-mkpostop-convert section)))
+                                                             (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE))))))
     ;;TODO else push the op-list, assume "dust" now EXPERIMENTAL
     (mapcar (lambda (x)
               (emsane-postop-push tx x))
-            (reverse (emsane-mkpostop-dustdetect)))
-    )
-
+             (emsane-mkpostop-dustdetect)))
   (emsane-postop-push postop-queue tx)
   ;;end tx
   (emsane-postop-go postop-queue)
   )
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; postprocessing support

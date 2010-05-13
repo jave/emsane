@@ -283,25 +283,26 @@ there can only be one emsane-tracker object with a particular name.")
   :abstract t )
 
 
-;;TODO parent should maybe go to common base class for emsane-section, and emsane-section-value
 
+(defclass emsane-parent()
+  ((parent :initarg :parent
+           :initform emsane-the-section-defaults
+           ;;:initform nil
+           :documentation "parent object. this instances slots overrides the parent slots.")))
 
 (defclass emsane-section (emsane-tracker   ;; store instantiated objects in a list(needs special clone override)
                           emsane-section-interface
+                          emsane-parent
                           )
   ((tracking-symbol :initform 'emsane-section-list)
-   (parent :initarg :parent :initform emsane-the-section-defaults
-           :initform nil
-           :documentation "parent object. this instances slots overrides the parent slots.")
    )
   "class describing a section")
 
 ;;;value class
-(defclass emsane-section-value (emsane-section-interface)
-  ((parent :initarg :parent
-           :initform nil
-           :documentation "parent object. this instances slots overrides the parent slots."))
+(defclass emsane-section-value (emsane-section-interface emsane-parent)
+  ()
   )
+
 (defvar emsane-the-section-defaults
   (emsane-section-value "the-section-defaults"
                         :size (emsane-query-paper-size "paper-size" :prompt "Paper size" :values emsane-paper-sizes)
@@ -315,8 +316,10 @@ there can only be one emsane-tracker object with a particular name.")
                         :parent nil
                         )
   "default values for section slots")
+
+
 (defclass emsane-process-state ()
-  (;;per job
+  (;;per job. currently a new instance is ceated for every scan buffer, and the "per-job" part cloned
    (postop-queue :initarg :postop-queue)
    (job :initarg :job)
    (job-id :initarg :job-id)
@@ -329,7 +332,7 @@ there can only be one emsane-tracker object with a particular name.")
   )
 
 ;;TODO stopgap global recall object again...
-;; global state i dont want
+;; global state i dont want. could go into process-state
 (defvar emsane-query-recall nil)
 (defun emsane-query-recall-reset ()
   (setq emsane-query-recall nil))
@@ -373,12 +376,12 @@ there can only be one emsane-tracker object with a particular name.")
   (unless sizes (setq sizes emsane-paper-sizes))
   (emsane-parse-paper-size (emsane-handle-slot this 'size) sizes))
 
-(defmethod emsane-get-page ((this emsane-section-interface))
+(defmethod emsane-get-page ((this emsane-process-state) section)
   "accessor for a sections page slot, supports prompting and recall"
   (let*
-      ((startnum (emsane-handle-slot this 'page)))
+      ((startnum (emsane-handle-slot section 'page)))
     (cond
-     ((eq 'continue startnum)  emsane-page)
+     ((eq 'continue startnum)  (oref this :page ))
      (t startnum))))
 
 (defmethod emsane-get-file-pattern ((this emsane-section-interface))
@@ -447,7 +450,8 @@ there can only be one emsane-tracker object with a particular name.")
 (defmethod emsane-get-options ((this emsane-scanner) section)
   (let* ((options (oref this :options))
          (image-type-options (car (emsane-get-image-type-options this
-                                                                 (oref section :image-type)))))
+                                                                 (emsane-get-image-type section);;(oref section :image-type)
+                                                                 ))))
     (append options image-type-options)))
 
 
@@ -496,6 +500,17 @@ Parent directories are created if needed."
     (mkdir dir t)
     dir))
 
+;;TODO refactor
+(defmethod emsane-get-job-dir  ((this emsane-job) job-id)
+  "Return directory used to store scans.
+Parent directories are created if needed."
+  (let
+      ((dir (concat (expand-file-name (emsane-get-root-directory this))
+                    "/"
+                    job-id
+                    "/")))
+    (mkdir dir t)
+    dir))
 
 
 (defmethod emsane-set-section ((this emsane-process-state) &optional section)
@@ -514,7 +529,7 @@ Parent directories are created if needed."
   )
 
 (defmethod emsane-dired ((this emsane-process-state) )
-  (dired (emsane-get-job-dir emsane-current-process-state)))
+  (dired (emsane-get-job-dir this)))
 
 (defun emsane-parse-paper-size (size-string sizes)
   "Return a size cons from SIZE-STRING.
@@ -550,7 +565,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 
 (defconst emsane-scan-file-suffix ".scan")
 
-(defun emsane-scan-start (job job-id &optional start-section section-overide)
+(defun emsane-scan-start (job job-id &optional start-section section-overide queue noreset)
   "start a new scan job."
   ;;piece together an emsane-process-state
   ;;start the scan
@@ -560,28 +575,39 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
         (job-id (emsane-read-job-id job))
         (start-section  (car (emsane-get-sections job))))
      (list job job-id start-section)))
-  (unless start-section (setq start-section (car (emsane-get-sections job))))
+  (unless start-section (setq start-section (car (emsane-get-sections job))) )
+  (unless queue
+    (setq queue (emsane-postop-queue job-id
+                                     :default-directory (emsane-get-job-dir job job-id)
+                                     :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
+    )
   (let*
       ((state (emsane-process-state job-id :job-id job-id :job job
-                                    :postop-queue nil
+                                    :postop-queue queue
                                     :section start-section
                                     :section-overide section-overide
-                                    ))
-       (q  (emsane-postop-queue job-id
-                                :default-directory (emsane-get-job-dir state)
-                                :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
-       )
-    (oset state :postop-queue q)
-    (emsane-query-recall-reset)
-    (emsane-scan state)))
+                                    )))
+    (unless noreset     (emsane-query-recall-reset))     ;;TODO dont reset in the multi-scan case wtf...
+    (emsane-fixup-section-chain state)
+    (emsane-scan state))
+    )
 
+(defmethod emsane-fixup-section-chain ((this emsane-process-state))
+  ;;:section-overide must be put in :section, and :section be made parent
+  ;;TODO this is confusing, some clearer model should be found
+  (let*
+      ((section-overide (oref this :section-overide)))
+    (if section-overide
+        (progn
+          (oset section-overide  :parent (oref this :section))
+          (oset this :section section-overide))
+      )))
+             
 
 
 (defun emsane-scan-continue (state)
   (interactive (list emsane-current-process-state))
-  (unless state (setq state emsane-current-process-state))
-  (emsane-scan state)
-  )
+  (emsane-scan state))
 
 (defmethod emsane-scan ((this emsane-process-state)
                         &optional buffer the-sentinel the-filter)
@@ -590,84 +616,90 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   ;;  (not sure, overwriting has proven convenient)
   ;;- if a scan process is already running in buffer signal error and stop
   ;;the scanner buffer used is figured out from the scanner name by default
-  (unless buffer (setq buffer (emsane-get-buffer-create (emsane-get-scanner (oref this :section)))))
-  (unless the-sentinel (setq the-sentinel 'emsane-sentinel))
-  (unless the-filter (setq the-filter 'emsane-filter))
-  (save-excursion
-    (set-buffer buffer)
-    (if (emsane-process-running) (error "scanner process already running in this buffer"))
-    (setq emsane-current-process-state this) ;;TODO is this the right place really?
-    (let*
-        ((postop-queue (oref this :postop-queue))
-         (section (if (oref this :section-overide)  (progn (oset (oref this :section-overide)  :parent section) (oref this :section-overide) ) (oref this :section)))
-         (job-dir (oref postop-queue :default-directory)) ;;TODO cleanup these bindings a bit, they happened due to refactoring
-         (dummy-dirok (assert (equal (substring job-dir -1) "/") nil "dir must end with /"));;It took a lot of time before I realized this is necessary
-         (default-directory  job-dir)
-         (scanner (emsane-get-scanner section))
-         (options (emsane-get-options scanner section))
-         (dealiased-source (emsane-get-source section))
-         (resolution (emsane-get-resolution section))
-         (dealiased-mode (emsane-get-mode section))
-         (file-pattern (emsane-get-file-pattern section))
-         ;;TODO unify :page and :page. call it just :page. it can possibly be stored in :section-overide
-         (startcount  (if (slot-boundp this :page) (oref this :page) (emsane-get-page section)))
-         (imgtype (emsane-get-image-type section))
-         (size (emsane-get-size section))
-         (paperwidth (car size))
-         (paperheight (cdr size))
-         (topleft1 (- (/ (oref scanner :scanwidth) 2)
-                      (/ paperwidth 2)))
-         (topleft (if (oref scanner :topleft-adf)
-                      topleft1
-                    0))
-         ;;TODO this is for croping from center, which maybe not all adf scanners need.
-         ;;for flatbeds, it would be: paperwidth
-         
-         ;;(imgtype (emsane-section-get-image-type emsane-current-section))
 
-         ;; only if hw supports it and only if jpg-color-hw option
-         ;;normaly sane 1.0.20 must be recompiled to get get this
+  ;;TODO :section-overide doesnt fcking work
+  (let*
+      ((section (oref this :section)))
+    (unless buffer (setq buffer (emsane-get-buffer-create (emsane-get-scanner section))))
+    (unless the-sentinel (setq the-sentinel 'emsane-sentinel))
+    (unless the-filter (setq the-filter 'emsane-filter))
+    (with-current-buffer buffer
+      (if (emsane-process-running) (error "scanner process already running in this buffer"))
+      (setq emsane-current-process-state this) ;;TODO is this the right place really?
+      (let*
+          ((postop-queue (oref this :postop-queue))
 
-         ;; funnily the "fujitsu" requires --page-height, while the "brother" "test" and "epson" fails with it.
-         (page-height (if  (oref scanner :needs-pageheight) 
-                          (list "--page-height" (number-to-string paperheight))))
-         (args `("scanadf" ,buffer "scanadf"
-                 "--device-name" ,(oref scanner :device)
-                 ,@(if dealiased-source (list "--source" dealiased-source))
-                 "--mode" ,dealiased-mode;;(emsane-mode-dealias scanner  mode)
-                 ,@options;;(emsane-get-options scanner  emsane-current-section) ;;scanner specific options
-                 "--resolution"  ,(number-to-string resolution)
-                 "--output-file" ,(concat file-pattern emsane-scan-file-suffix) 
-                 "--start-count" ,(number-to-string startcount)
-                 ,@(if (oref scanner :inhibit-adf) (list "--end-count" (number-to-string startcount) ))
-                 "-l" ,(number-to-string topleft)
-                 "-t" ,(number-to-string 0)
-                 "-x" ,(number-to-string paperwidth)
+           (job-dir (oref postop-queue :default-directory)) ;;TODO cleanup these bindings a bit, they happened due to refactoring
+           (dummy-dirok (assert (equal (substring job-dir -1) "/") nil "dir must end with /"));;It took a lot of time before I realized this is necessary
+           (default-directory  job-dir)
+           (scanner (emsane-get-scanner section))
+           (options (emsane-get-options scanner section))
+           (dealiased-source (emsane-get-source section))
+           (resolution (emsane-get-resolution section))
+           (dealiased-mode (emsane-get-mode section))
+           (file-pattern (emsane-get-file-pattern section))
+           (startcount  (if (slot-boundp this :page) (oref this :page) (emsane-get-page this section)))
+           (imgtype (emsane-get-image-type section))
+           (size (emsane-get-size section))
+           (paperwidth (car size))
+           (paperheight (cdr size))
+           (topleft1 (- (/ (oref scanner :scanwidth) 2)
+                        (/ paperwidth 2)))
+           (topleft (if (oref scanner :topleft-adf)
+                        topleft1
+                      0))
+           ;;TODO this is for croping from center, which maybe not all adf scanners need.
+           ;;for flatbeds, it would be: paperwidth
+           
+           ;;(imgtype (emsane-section-get-image-type emsane-current-section))
 
-                 ;;TODO figure out how to handle height better.
-                 ;; y is height of scan-area
-                 ;; page-height is height of scanner physical scan area, but this is less than max by default.
-                 ;;y <= paperheight
-                 "-y" ,(number-to-string paperheight)
-                 ,@page-height))
-         (dbg-process
-          (format "scan command: %s\n" args
-                  (mapconcat (lambda (x) x) (cddr args) " ")
-                  
-                  ))
-         ;;TODO verify the type of each element of arg. no nil:s for instance
-         ;;(all-not-nil  (mapconcat (lambda (x) (stringp x)) (cddr args) " "))
-         (scan-process
-          (apply 'start-file-process
-                 args
-                 )))
-      (insert dbg-process)
-      (insert (format "job-dir:%s\n" job-dir))
-      (set-process-sentinel scan-process the-sentinel)
-      (set-process-filter scan-process the-filter)
-      (process-put scan-process 'emsane-process-state
-                   this)
-      )))
+           ;; only if hw supports it and only if jpg-color-hw option
+           ;;normaly sane 1.0.20 must be recompiled to get get this
+
+           ;; funnily the "fujitsu" requires --page-height, while the "brother" "test" and "epson" fails with it.
+           (page-height (if  (oref scanner :needs-pageheight) 
+                            (list "--page-height" (number-to-string paperheight))))
+           (scanscript (if (equal emsane-scan-file-ready-notifier 'emsane-scanadf-emacslient-notify)
+                           (list "--scan-script" emsane-scanadf-emacslient-path)))
+           (args `("scanadf" ,buffer "scanadf"
+                   "--device-name" ,(oref scanner :device)
+                   ,@(if dealiased-source (list "--source" dealiased-source))
+                   "--mode" ,dealiased-mode;;(emsane-mode-dealias scanner  mode)
+                   ,@options;;(emsane-get-options scanner  emsane-current-section) ;;scanner specific options
+                   ,@scanscript
+                   "--resolution"  ,(number-to-string resolution)
+                   "--output-file" ,(concat file-pattern emsane-scan-file-suffix) 
+                   "--start-count" ,(number-to-string startcount)
+                   ,@(if (oref scanner :inhibit-adf) (list "--end-count" (number-to-string startcount) ))
+                   "-l" ,(number-to-string topleft)
+                   "-t" ,(number-to-string 0)
+                   "-x" ,(number-to-string paperwidth)
+
+                   ;;TODO figure out how to handle height better.
+                   ;; y is height of scan-area
+                   ;; page-height is height of scanner physical scan area, but this is less than max by default.
+                   ;;y <= paperheight
+                   "-y" ,(number-to-string paperheight)
+                   ,@page-height))
+           (dbg-process
+            (format "scan command: %s\n" args
+                    ;;(mapconcat (lambda (x) x) (cddr args) " ")
+                    
+                    ))
+           ;;TODO verify the type of each element of arg. no nil:s for instance
+           ;;(all-not-nil  (mapconcat (lambda (x) (stringp x)) (cddr args) " "))
+           (envdummy (setenv "EMSANE_STATE" (buffer-name)))
+           (scan-process
+            (apply 'start-file-process
+                   args
+                   )))
+        (insert dbg-process)
+        (insert (format "job-dir:%s\n" job-dir))
+        (set-process-sentinel scan-process the-sentinel)
+        (set-process-filter scan-process the-filter)
+        (process-put scan-process 'emsane-process-state
+                     this)
+        ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mode setup
@@ -768,6 +800,19 @@ Argument MSG is the exit code."
 ;; Document feeder jammed
 ;; scan finished?
 
+(defvar emsane-scan-file-ready-notifier 'emsane-scanadf-line-handler)
+(setq emsane-scan-file-ready-notifier 'emsane-scanadf-emacslient-notify)
+(defvar emsane-scanadf-emacslient-path   "/home/joakim/.elisp/emsane/emsane-client.sh")
+
+;;TODO define a class for notifiers, line-based or emacsclient-based
+
+(defun emsane-scanadf-emacsclient-notify (filename state-id)
+  (message "oh a file was ready! %s and i got a state id too! %s" filename state-id)
+  ;;the state-id is currently the scanner buffer, because that happened to be convenient
+  (with-current-buffer state-id
+    (emsane-scanadf-filename-handler filename emsane-current-process-state)))
+
+  
 
 (defun emsane-filter (proc string)
   "Filters scanadf output.
@@ -781,57 +826,77 @@ Argument STRING output from scanadf."
         ;; Insert the text, advancing the process marker.
         (goto-char (process-mark proc))
         ;;break up string in lines and handle each
-        (mapcar (lambda (line) (emsane-line-handler line
-                                                    state
-                                                    )) (split-string string "\n" t))
+        (if (equal emsane-scan-file-ready-notifier 'emsane-scanadf-line-handler)
+            (mapc (lambda (line) (emsane-scanadf-line-handler line state))
+                  (split-string string "\n" t)))
         (insert (format "filter:<<%s>>\n" ;;TODO should be possible to visit image files in the scanadf buffer!
-                        (substring string 0 -1)
+                        (substring string 0 -1);;remove linefeed
                         ))
         (set-marker (process-mark proc) (point)))
       (if moving (goto-char (process-mark proc))))))
 
-(defun emsane-line-handler (string state)
-  ;;TODO is a method really
+(defun emsane-scanadf-line-handler (string state)
+  ;;TODO I would like to support more scan notification methods.
+  ;;this one is coupled to scanadf, but emacsclient, or api variants are also desireable
   "Process a single line STRING of scanadf output."
-  (let*
-      ((filename nil)
-       (tx nil)
-       (section (oref state :section))
-       (postop-queue (oref state :postop-queue))
-       (op-list (oref section :operation-list))
-       )
-    ;;TODO refactor this: - cond looks strange - factor out string match code from action code
     (cond
      ((string-match "Scanned document \\(.*\\)" string) ;;a string emitted by scanadf
-      (setq filename (match-string 1 string))
-      (emsane-line-default-postop filename postop-queue)
-      (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) ;;this must match the scanned page, which must have a .scan suffix
-      (oset state  :page
-            (+ 1 (string-to-number (match-string 2 filename))))
-      )
-     (t );;TODO do something if line didnt match
+      (emsane-scanadf-filename-handler (match-string 1 string) state)
      )))
 
-(defun emsane-line-default-postop (filename postop-queue)
-  ;;begin tx
-  (setq tx (emsane-postop-transaction "tx"))
-  (emsane-postop-setenv tx 'SCANFILE filename)
-  (emsane-postop-setenv tx 'SCANFILEBASE (substring filename 0 ( -(length emsane-scan-file-suffix))))
-  (if (null op-list) ;;nil currently means do a default conversion
-      (progn
-        ;;push a default op:s for now. these converts and deletes original.
-        (emsane-postop-push tx (emsane-mkpostop-convert section))        
-        (emsane-postop-push tx (emsane-postop-lisp-operation "op"
-                                                             :operation-lambda
-                                                             (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE))))))
-    ;;TODO else push the op-list, assume "dust" now EXPERIMENTAL
-    (mapcar (lambda (x)
-              (emsane-postop-push tx x))
-             (emsane-mkpostop-dustdetect)))
-  (emsane-postop-push postop-queue tx)
-  ;;end tx
-  (emsane-postop-go postop-queue)
+(defun emsane-scanadf-filename-handler (filename state)  
+  (let*
+      ((section (oref state :section)))
+    (emsane-line-default-postop filename (oref state :postop-queue) section)
+    (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) 
+    (oset state  :page (+ 1 (string-to-number (match-string 2 filename))))))
+
+
+(setq emsane-dust-area-height 30)
+;;150px should be 1/2 inch at 300 dpi = 1.27 cm
+;;turns out only 30px is suitable for this measurment! 30px = 1/10 inch = 2.54/10 cm
+(defun emsane-mkpostop-dustdetect (section)
+  "detect dust adf scanner glass and quit"
+  ;;- preop: add 150px to scan area somehow(just hardcode for now)
+  ;;- postop:
+  ;;- split image in 2 parts, "image.jpg" and "dust.jpg", at 150px from bottom
+  ;;- "dust dust.jpg" is added to tx, if it fails, transaction fails, job fails
+  ;;- normal postprocessing of "image" (emsane-mkpostop-convert)
+  (list
+   (emsane-postop-lisp-operation "size" :operation-lambda  (lambda (tx q)
+                                                             (emsane-postop-setenv tx
+                                                                                   'CROP_AT_Y
+                                                                                   (- (cdr (emsane-image-size (emsane-postop-getenv tx 'SCANFILE)))
+                                                                                      emsane-dust-area-height))))
+   (emsane-postop-simple-shell-operation "crop-dust"  :operation-shell-command "convert +repage -crop +0+${CROP_AT_Y} ${SCANFILE} ${SCANFILE}.dust" )
+   (emsane-postop-simple-shell-operation "crop-img"   :operation-shell-command (format "convert +repage -crop 0x0+0-%s ${SCANFILE} ${SCANFILE}"
+                                                                                       emsane-dust-area-height) )
+   (emsane-mkpostop-convert section)
+   (emsane-postop-simple-shell-operation "dust"  :operation-shell-command "dust ${SCANFILE}.dust"))
   )
+
+(defun emsane-line-default-postop (filename postop-queue section)
+  ;;begin tx
+  (let*
+      ((tx (emsane-postop-transaction "tx"))
+       (op-list (oref section :operation-list)))
+    (emsane-postop-setenv tx 'SCANFILE filename)
+    (emsane-postop-setenv tx 'SCANFILEBASE (substring filename 0 ( - (length emsane-scan-file-suffix))))
+    (if (null op-list) ;;nil currently means do a default conversion
+        (progn
+          ;;push a default op:s for now. these converts and deletes original.
+          (emsane-postop-push tx (emsane-mkpostop-convert section))        
+          (emsane-postop-push tx (emsane-postop-lisp-operation "op"
+                                                               :operation-lambda
+                                                               (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE))))))
+      ;;TODO else push the op-list, assume "dust" now EXPERIMENTAL
+      (mapc (lambda (x)
+                (emsane-postop-push tx x))
+              (emsane-mkpostop-dustdetect section)))
+    (emsane-postop-push postop-queue tx)
+    ;;end tx
+    (emsane-postop-go postop-queue)
+  ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -874,9 +939,12 @@ FILENAME is currently assumed have a .scan suffix"
   "mk conversion postop"
   (let*
       ((imgtype (emsane-get-image-type section))
+       (actual-img (emsane-get-actual-image-type (emsane-get-scanner section) imgtype)
+                   )
        (convcmd (emsane-mk-conversion-command
-                 "${SCANFILEBASE}" emsane-scan-file-suffix
-                 (emsane-get-actual-image-type (emsane-get-scanner section) imgtype)
+                 "${SCANFILEBASE}"
+                 emsane-scan-file-suffix
+                 actual-img
                  imgtype)))
     (emsane-postop-simple-shell-operation
      "op1"
@@ -893,28 +961,7 @@ FILENAME is currently assumed have a .scan suffix"
     (cons (string-to-number (match-string 1))
           (string-to-number (match-string 2)))))
 
-(setq emsane-dust-area-height 30)
-;;150px should be 1/2 inch at 300 dpi = 1.27 cm
-;;turns out only 30px is suitable for this measurment! 30px = 1/10 inch = 2.54/10 cm
-(defun emsane-mkpostop-dustdetect ()
-  "detect dust adf scanner glass and quit"
-  ;;- preop: add 150px to scan area somehow(just hardcode for now)
-  ;;- postop:
-  ;;- split image in 2 parts, "image.jpg" and "dust.jpg", at 150px from bottom
-  ;;- "dust dust.jpg" is added to tx, if it fails, transaction fails, job fails
-  ;;- normal postprocessing of "image" (emsane-mkpostop-convert)
-  (list
-   (emsane-postop-lisp-operation "size" :operation-lambda  (lambda (tx q)
-                                                             (emsane-postop-setenv tx
-                                                                                   'CROP_AT_Y
-                                                                                   (- (cdr (emsane-image-size (emsane-postop-getenv tx 'SCANFILE)))
-                                                                                      emsane-dust-area-height))))
-   (emsane-postop-simple-shell-operation "crop-dust"  :operation-shell-command "convert +repage -crop +0+${CROP_AT_Y} ${SCANFILE} ${SCANFILE}.dust" )
-   (emsane-postop-simple-shell-operation "crop-img"   :operation-shell-command (format "convert +repage -crop 0x0+0-%s ${SCANFILE} ${SCANFILE}"
-                                                                                       emsane-dust-area-height) )
-   (emsane-mkpostop-convert )
-   (emsane-postop-simple-shell-operation "dust"  :operation-shell-command "dust ${SCANFILE}.dust"))
-  )
+
 
 ;;TODO recovering a sad postop q
 ;;(oset (oref emsane-current-process-state :postop-queue) :state nil) (emsane-postop-go (oref emsane-current-process-state :postop-queue) )

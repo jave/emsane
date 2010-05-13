@@ -101,8 +101,7 @@
                       )))
     (set-process-sentinel post-process 'emsane-postop-sentinel)
     (process-put post-process 'queue q)
-    (save-excursion
-      (set-buffer proc-buf)
+    (with-current-buffer proc-buf
       (insert (format "postprocessing:%s env:%s\n" cmd (emsane-plist2env (oref tx environment))))
       )
     (oset q :continue-go-loop nil)))
@@ -130,9 +129,10 @@
   "error handler"
   ;;TODO better error handler, inhibit further queue opperations, stop scanning!
   ;;TODO call hooks, client should know about error(shut down scanner processes in this case)
-  (oset queue :state result)
-  (mapcar #'funcall (oref queue :error-hooks));;using run-hooks turned out not so good here
-  (error "Non 0 return code from postop. This is bad. Stopping. result:%s" result))
+  ;;(oset this :state result) ;;TODO 
+  (mapc #'funcall (oref this :error-hooks));;using run-hooks turned out not so good here
+  (with-current-buffer (oref this :process-buffer)
+    (insert (format "Non 0 return code from postop. This is bad.  result:%s" result))))
 
 (defmethod emsane-postop-push ((this emsane-postop-fifo) object)
   "push object on fifo"
@@ -183,7 +183,7 @@ if the queue is empty return nil."
   ;;TODO the method should always be safe to call, regardless of the queue state, ensure this
   ;;TODO delete the transaction if the operation fails.
   ;;should almost work, because if crash, we dont push back th eop
-  (if (oref this state) (error "the queue is unwell:" (oref this state)))
+  (if (oref this state) (error "the queue is unwell:%s" (oref this state)))
   (if (emsane-postop-hasnext this)
       (let*
           ((tx (emsane-postop-dequeue this))
@@ -198,7 +198,7 @@ if the queue is empty return nil."
 
 (defmethod emsane-postop-go ((this emsane-postop-queue))
   "start or continue executing transactions in queue."
-  (if (oref this state) (error "the queue is unwell:" (oref this state)))
+  (if (oref this state) (error "the queue is unwell:%s" (oref this state)))
   (let
       ((continue-go-loop t))
     (while (and continue-go-loop (emsane-postop-hasnext this))

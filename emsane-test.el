@@ -7,7 +7,7 @@
 
 ;; properties specific for the "test" virtual scan device SANE provides
 ;;(setq emsane-scanner-list nil)
-(emsane-scanner "test"
+(emsane-scanner "test1"
                 :device "test"
                 :scanwidth 216
                 ;;:mode ;;TODO Color or Gray and depth options for test
@@ -22,17 +22,36 @@
                 :image-type-options nil
                 )
 
+(clone (emsane-scanner-get "test1") "test2")
+(clone (emsane-scanner-get "test1") "test3")
+
+
+(emsane-multi-job "book-multi-test"
+                  :job "book"
+                  :multi-section-list (list
+                                       (emsane-multi-section "test1"
+                                                             :scanner "test1"
+                                                             :start-section "book-body")
+                                       (emsane-multi-section "test2"
+                                                             :scanner "test2"
+                                                             :start-section "book-body"
+                                                             :page   (emsane-query-integer "page" :prompt "page"))
+                                       ;; (emsane-multi-section "test3"
+                                       ;;                       :scanner "test3"
+                                       ;;                      :start-section "book-cover-simplex")
+                                       ))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;cloning; i provide an own clone method that supports instance tracking
 (deftest emsane-clone ()
-  (should-not (null (emsane-scanner-get "test")));;must be defined
+  (should-not (null (emsane-scanner-get "test1")));;must be defined
   (let*
-      ((theclone (clone (emsane-scanner-get "test") "test2")))
+      ((theclone (clone (emsane-scanner-get "test1") "test_a")))
     (should-not (null theclone))
-    (should (equal theclone (emsane-scanner-get "test2")))
-    (should (equal "test2" (oref  theclone :object-name)))
-    (should (equal "test" (oref  (emsane-scanner-get "test") :object-name)))
-    (should-error  (clone (emsane-scanner-get "test")));;anon clone is too much bother, so disable it
+    (should (equal theclone (emsane-scanner-get "test_a")))
+    (should (equal "test_a" (oref  theclone :object-name)))
+    (should (equal "test1" (oref  (emsane-scanner-get "test1") :object-name)))
+    (should-error  (clone (emsane-scanner-get "test1")));;anon clone is too much bother, so disable it
   )
   )
 ;;(emsane-clone-internal (emsane-scanner-get "test"))
@@ -175,7 +194,7 @@
       ;;we need a clone since otherwise the orignal setting object will be modified
         ((dir (emsane-test-setup-jobdir "1"))
          (settings (emsane-section-value "test-settings"
-                                             :scanner "test"
+                                             :scanner "test1"
                                              :source 'duplex
                                              :mode 'color
                                              :resolution 300
@@ -306,7 +325,7 @@ try more of the postop stuff than the basic test."
                            :section
                            (emsane-section "test-settings"
                                            :operation-list nil                                             
-                                           :scanner "test"
+                                           :scanner "test1"
                                            :source 'duplex
                                            :mode 'color
                                            :resolution 300

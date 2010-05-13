@@ -142,11 +142,6 @@ VALUES is a list of strings."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;TODO sort of feels like this could fit into the query scheme, because really we are asking for the value
-;; of the "page" slot, with   emsane-page being the default
-(defun emsane-ask-pagenum ()
-  "prompt for a page number"
-  (read-number "Pagenumber of next scan: "  emsane-page))
 
 (defun emsane-ask-subsection ()
   "prompt for a subsection number"

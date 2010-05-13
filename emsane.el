@@ -521,6 +521,8 @@ Parent directories are created if needed."
   (unless section (setq section (emsane-section-get (emsane-do-query (emsane-query-string "gimmesectio" :prompt "Section" :values (oref (oref this :job) :section-list))))))
   ;;then set it
   (oset this :section section)
+  ;;then take care of section overides
+  (emsane-fixup-section-chain this)
   )
 
 (defmethod emsane-set-page ((this emsane-process-state) &optional page)

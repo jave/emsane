@@ -129,7 +129,7 @@
   "error handler"
   ;;TODO better error handler, inhibit further queue opperations, stop scanning!
   ;;TODO call hooks, client should know about error(shut down scanner processes in this case)
-  ;;(oset this :state result) ;;TODO 
+  (oset this :state result) ;;TODO 
   (mapc #'funcall (oref this :error-hooks));;using run-hooks turned out not so good here
   (with-current-buffer (oref this :process-buffer)
     (insert (format "Non 0 return code from postop. This is bad.  result:%s" result))))

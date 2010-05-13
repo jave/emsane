@@ -805,9 +805,11 @@ Argument MSG is the exit code."
 (defvar emsane-scanadf-emacslient-path   "/home/joakim/.elisp/emsane/emsane-client.sh")
 
 ;;TODO define a class for notifiers, line-based or emacsclient-based
+;; - the line based handler seems to suffer from race conditions. scanadf reports files too early sometimes
+;; - emacsclient-notify seems robust, but a small separate wrapper is needed
 
 (defun emsane-scanadf-emacsclient-notify (filename state-id)
-  (message "oh a file was ready! %s and i got a state id too! %s" filename state-id)
+  ;;(message "oh a file was ready! %s and i got a state id too! %s" filename state-id)
   ;;the state-id is currently the scanner buffer, because that happened to be convenient
   (with-current-buffer state-id
     (emsane-scanadf-filename-handler filename emsane-current-process-state)))

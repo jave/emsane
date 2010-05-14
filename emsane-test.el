@@ -68,7 +68,7 @@
     (should (equal pushed poped))))
 
 (deftest emsane-postop-queue-push-pop ()
-  ;; push/pop test. try fifo:ness
+  ;; push/pop test. try lifo:ness
   (let*
       ((q  (emsane-postop-queue "tq"))
        (pushed1 'a)
@@ -313,13 +313,13 @@ try more of the postop stuff than the basic test."
 
 (defvar emsane-test-scanfile  "~/.elisp/emsane/0100-0001.scan");;TODO remove hardcode
 
-(deftest emsane-line-handler ()
+(deftest emsane-scanadf-line-handler ()
   (let ((dir  (emsane-test-setup-jobdir "lh")))
     (copy-file emsane-test-scanfile dir)
     ;;simulate the line handler receving a scaned file notification.
     ;;this will also test the default behaviour of the postop queue
     ;;TODO actualy verify it does the right thing
-    (emsane-line-handler
+    (emsane-scanadf-line-handler
      (format "Scanned document %s0100-0001.scan" dir)
      (emsane-process-state "test-proc-state"
                            :section
@@ -339,7 +339,7 @@ try more of the postop stuff than the basic test."
                            (emsane-postop-queue "test_transaction_queue"
                                                 :default-directory dir
                                                 :process-buffer (get-buffer-create "*emsane postop test*")
-                                                :fifo '()
+                                                :lifo '()
                                                 :error-hooks    (list (lambda () (error "test postop q error hook called"))))
                            ))
     ))

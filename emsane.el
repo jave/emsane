@@ -516,9 +516,17 @@ Parent directories are created if needed."
 (defmethod emsane-set-section ((this emsane-process-state) &optional section)
   "Set section. if SECTION is nil, prompt for one."
   ;;1st reset state
-  (slot-makeunbound this :page)
+  (slot-makeunbound this :page) ;;this isnt sufficient!
+  ;;ok, when :page in state is unbound, the section is queried
+  ;;but, the section includes section-overide! and for fujitsu2 there is a query there, which is already answered
+  ;;so page needs to be thoroughly reset in this mode
+  (slot-makeunbound (oref this :section-overide) :page) ;;section-overide should be somewhat reset as well. a bit too ungeneral for my taste
+
+  
   ;;then figure out the section
-  (unless section (setq section (emsane-section-get (emsane-do-query (emsane-query-string "gimmesectio" :prompt "Section" :values (oref (oref this :job) :section-list))))))
+  (unless section
+    (setq section (emsane-section-get
+                   (emsane-do-query (emsane-query-string "gimmesectio" :prompt "Section" :values (oref (oref this :job) :section-list))))))
   ;;then set it
   (oset this :section section)
   ;;then take care of section overides
@@ -968,7 +976,7 @@ FILENAME is currently assumed have a .scan suffix"
 
 
 ;;TODO recovering a sad postop q
-;;(oset (oref emsane-current-process-state :postop-queue) :state nil) (emsane-postop-go (oref emsane-current-process-state :postop-queue) )
+;;(progn (oset (oref emsane-current-process-state :postop-queue) :state nil) (emsane-postop-go (oref emsane-current-process-state :postop-queue) ))
 ;;the postop q rarely goes sad, but it does happen, so far because of some race condition with scanadf it seems
 ;;that is, scanadf seems to report a file as finished before it actualy is
 

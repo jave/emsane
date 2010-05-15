@@ -139,6 +139,10 @@
   ;;(oset this :state result) ;;TODO "state" is currently used as a queue-killer, which doesnt happen atm
 
   ;;the case below is "tx killer", push the broken tx on an error queue for later examination, queue chugs on as usual
+  (unless (object-p (oref this :error-queue)) (oset this :error-queue (emsane-postop-lifo "errorq")))
+
+  (emsane-postop-dequeue this);;the current tx must be removed from the queue
+  ;;TODO :current-tx should be the complete failed transaction, not the same as the modified tx on top of the q, as it is now
   (emsane-postop-push (oref this :current-tx) (oref this :current-op))
   (emsane-postop-push (oref this :error-queue) (oref this :current-tx))
   (mapc #'funcall (oref this :error-hooks));;using run-hooks turned out not so good here

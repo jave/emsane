@@ -432,7 +432,7 @@ there can only be one emsane-tracker object with a particular name.")
   (let*
       ((buffer (get-buffer-create (format "*Emsane %s*" (oref this object-name)))))
     (with-current-buffer buffer
-      ;;dont reset locals if already in correct mode
+      ;;dont reset locals if already in correct mode 
       (unless (eq major-mode 'emsane-mode) (emsane-mode)))
     buffer))
 
@@ -698,7 +698,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                     ))
            ;;TODO verify the type of each element of arg. no nil:s for instance
            ;;(all-not-nil  (mapconcat (lambda (x) (stringp x)) (cddr args) " "))
-           (envdummy (setenv "EMSANE_STATE" (buffer-name)))
+           (envdummy (setenv "EMSANE_STATE" (buffer-name)));;so scanadf will have a buffer id, which then scan-script will know!
            (scan-process
             (apply 'start-file-process
                    args
@@ -822,7 +822,7 @@ Argument MSG is the exit code."
   ;;(message "oh a file was ready! %s and i got a state id too! %s" filename state-id)
   ;;the state-id is currently the scanner buffer, because that happened to be convenient
   (with-current-buffer state-id
-    (emsane-scanadf-filename-handler filename emsane-current-process-state)))
+    (emsane-filename-handler filename emsane-current-process-state)))
 
   
 
@@ -853,15 +853,29 @@ Argument STRING output from scanadf."
   "Process a single line STRING of scanadf output."
     (cond
      ((string-match "Scanned document \\(.*\\)" string) ;;a string emitted by scanadf
-      (emsane-scanadf-filename-handler (match-string 1 string) state)
+      (emsane-filename-handler (match-string 1 string) state)
      )))
 
-(defun emsane-scanadf-filename-handler (filename state)  
+(defun emsane-filename-handler (filename state)  
   (let*
       ((section (oref state :section)))
     (emsane-line-default-postop filename (oref state :postop-queue) section)
     (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) 
     (oset state  :page (+ 1 (string-to-number (match-string 2 filename))))))
+
+(defun emsane-dired-notifier ()
+  ;;adding files from dired, mostly for debugging
+  (interactive)
+  (let* ((all-of-them (dired-get-marked-files t)
+          ))
+    (with-current-buffer "*Emsane fujitsu2*";;TODO interactive
+        (mapc (lambda (filename)
+                (emsane-filename-handler
+                 filename
+                 emsane-current-process-state)) all-of-them)
+    )
+    ))
+  
 
 
 (setq emsane-dust-area-height 30)

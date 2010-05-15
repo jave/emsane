@@ -216,7 +216,7 @@
    )
 
 
-(deftest emsaneBROKEN-scan-2 ()
+(deftest emsane-scan-2 ()
   "slightly less basic test of emsane-scan. check the buffer for nice output.
 try more of the postop stuff than the basic test."
   (progn
@@ -227,7 +227,7 @@ try more of the postop stuff than the basic test."
         ((dir (emsane-test-setup-jobdir "2"))
          (settings (emsane-section-value "test-settings"
                                          :operation-list nil
-                                             :scanner "test"
+                                             :scanner "test1"
                                              :source 'duplex
                                              :mode 'color
                                              :resolution 150

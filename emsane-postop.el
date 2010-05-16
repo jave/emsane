@@ -141,7 +141,12 @@
   ;;the case below is "tx killer", push the broken tx on an error queue for later examination, queue chugs on as usual
   (unless (object-p (oref this :error-queue)) (oset this :error-queue (emsane-postop-lifo "errorq")))
 
-  (emsane-postop-dequeue this);;the current tx must be removed from the queue
+  ;;the current tx must be removed from the queue, but, uh, only if were executing a shell op??
+  ;;this is because a shell op is pushed back onto the queue before its actualy finished. hmmm.
+  ;;see donext.
+  (if (equal (object-class (oref this :current-op))  'emsane-postop-simple-shell-operation)
+      (emsane-postop-dequeue this))
+  
   ;;TODO :current-tx should be the complete failed transaction, not the same as the modified tx on top of the q, as it is now
   (emsane-postop-push (oref this :current-tx) (oref this :current-op))
   (emsane-postop-push (oref this :error-queue) (oref this :current-tx))
@@ -205,7 +210,7 @@ if the queue is empty return nil."
               (setq op  (emsane-postop-dequeue tx))
               (oset this :current-op op)
               (emsane-postop-exec op tx this)
-              (emsane-postop-push this tx))
+              (emsane-postop-push this tx));;TODO shell ops are pushed back before actualy done, which is confusing
           (emsane-postop-donext this)))))
 
 (defmethod emsane-postop-go ((this emsane-postop-queue))

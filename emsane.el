@@ -323,6 +323,7 @@ there can only be one emsane-tracker object with a particular name.")
    (postop-queue :initarg :postop-queue)
    (job :initarg :job)
    (job-id :initarg :job-id)
+   (missing-files :initarg :missing-files)
    ;;per buffer
    (section :initarg :section)
    (section-overide :initarg :section-overide :initform nil)   
@@ -330,6 +331,11 @@ there can only be one emsane-tracker object with a particular name.")
    (page :initarg :page)
    )
   )
+
+(defmethod initialize-instance ((this emsane-process-state)
+                                &rest slots)
+  (oset this :missing-files (emsane-postop-lifo "missing-files"))
+  (call-next-method))
 
 ;;TODO stopgap global recall object again...
 ;; global state i dont want. could go into process-state
@@ -592,7 +598,9 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                                      :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
     )
   (let*
-      ((state (emsane-process-state job-id :job-id job-id :job job
+      ((state (emsane-process-state job-id
+                                    :job-id job-id
+                                    :job job
                                     :postop-queue queue
                                     :section start-section
                                     :section-overide section-overide
@@ -670,7 +678,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
            (page-height (if  (oref scanner :needs-pageheight) 
                             (list "--page-height" (number-to-string paperheight))))
            (scanscript (if (equal emsane-scan-file-ready-notifier 'emsane-scanadf-emacslient-notify)
-                           (list "--scan-script" emsane-scanadf-emacslient-path)))
+                           (list "--script-wait" "--scan-script" emsane-scanadf-emacslient-path)))
            (args `("scanadf" ,buffer "scanadf"
                    "--device-name" ,(oref scanner :device)
                    ,@(if dealiased-source (list "--source" dealiased-source))
@@ -856,12 +864,14 @@ Argument STRING output from scanadf."
       (emsane-filename-handler (match-string 1 string) state)
      )))
 
-(defun emsane-filename-handler (filename state)  
-  (let*
-      ((section (oref state :section)))
-    (emsane-line-default-postop filename (oref state :postop-queue) section)
-    (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) 
-    (oset state  :page (+ 1 (string-to-number (match-string 2 filename))))))
+(defun emsane-filename-handler (filename state)
+  (if (file-exists-p (concat (emsane-get-job-dir state) filename)) ;;check that the file really is there 1st
+      (let*
+          ((section (oref state :section)))
+        (emsane-line-default-postop filename (oref state :postop-queue) section)
+        (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) 
+        (oset state  :page (+ 1 (string-to-number (match-string 2 filename)))))
+    (emsane-postop-push (oref state :missing-files) filename)))
 
 (defun emsane-dired-notifier ()
   ;;adding files from dired, mostly for debugging

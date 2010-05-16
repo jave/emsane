@@ -47,7 +47,7 @@ will scan different sections of the material."
                job
                job-id
                (emsane-section-get (oref msection :start-section))
-               msection   ;;section-overide should probably be made, uhm, section specific
+               msection   ;;section-overide should probably be made, per section 
                queue
                t
                )

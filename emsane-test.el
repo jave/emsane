@@ -243,7 +243,7 @@ try more of the postop stuff than the basic test."
                         :process-buffer (get-buffer-create "*emsane-scan-2 postop*")
                         :error-hooks    (list (lambda () (message "deftest emsane-scan-2 postop q error hook called"))) ))
          )
-      (emsane-scan  (emsane-process-state "test" :section settings :postop-queue q)  buffer
+      (emsane-scan  (emsane-process-state "test" :section settings :postop-queue q :job (emsane-job-get "book") :job-id "test")  buffer
                    )))
    )
 

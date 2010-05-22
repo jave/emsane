@@ -87,7 +87,10 @@
   (let*
       ((default-directory  (oref q default-directory)))
     (condition-case lispop-error
-        (funcall (oref this :operation-lambda) tx q)
+        (progn
+          (funcall (oref this :operation-lambda) tx q)
+          (emsane-postop-push q tx);;push backcurrent tx. will be skipped if op fails
+          )
       (error (emsane-postop-signal-error q lispop-error)))
     ))
 
@@ -122,10 +125,11 @@
 (defun emsane-postop-sentinel (process result)
   "called when an image shell postop finishes"
   (let*
-      ((queue (process-get process 'queue)))
-    (unless (= 0 (process-exit-status process))
+      ((queue (process-get process 'queue))
+       (tx-error (= 0 (process-exit-status process))))
+    (unless tx-error
       (emsane-postop-signal-error queue result))
-    (emsane-postop-finish-shell-operation queue)
+    (emsane-postop-finish-shell-operation queue tx-error)
     (emsane-postop-go queue);;now continue processing queue transations
     ))
 
@@ -144,8 +148,12 @@
   ;;the current tx must be removed from the queue, but, uh, only if were executing a shell op??
   ;;this is because a shell op is pushed back onto the queue before its actualy finished. hmmm.
   ;;see donext. this sucks.
-  (if (equal (object-class (oref this :current-op))  'emsane-postop-simple-shell-operation)
-      (emsane-postop-dequeue this))
+
+  ;;im trying to have the sentinel push back the tx instead
+ 
+  ;; (if (equal (object-class (oref this :current-op))  'emsane-postop-simple-shell-operation)
+  ;;     (emsane-postop-dequeue this))
+
   
   ;;TODO :current-tx should be the complete failed transaction, not the same as the modified tx on top of the q, as it is now
   (emsane-postop-push (oref this :current-tx) (oref this :current-op));;push back the failed op on current tx
@@ -153,10 +161,11 @@
   
 
   (mapc #'funcall (oref this :error-hooks));;using run-hooks turned out not so good here
-  (with-current-buffer (oref this :process-buffer)
-    (insert (format "Non 0 return code from postop. This is bad.  result:%s" result)))
-  (message (format "Non 0 return code from postop. This is bad.  result:%s" result))
-  (emsane-postop-go this);;TODO rather just set the continue-go
+  (let*
+      ((msg (format "postop failed. result:%s tx:%s op:%s" result (oref this :current-tx) (oref this :current-op))))
+    (with-current-buffer (oref this :process-buffer)
+      (insert msg))
+    (message msg))
   )
 
 (defmethod emsane-postop-push ((this emsane-postop-lifo) object)
@@ -189,9 +198,9 @@
 (defmethod  emsane-postop-setenv ((this  emsane-postop-transaction) varname value)
   (oset this environment (plist-put (oref this environment) varname value)))
 
-(defmethod emsane-postop-finish-shell-operation ((this emsane-postop-queue))
-  "finishup an ongoing shell operatio"
-  ;;TODO hmm is this all?
+(defmethod emsane-postop-finish-shell-operation ((this emsane-postop-queue) tx-error)
+  "finishup an ongoing shell operation"
+  (emsane-postop-push this (oref this :current-tx));;push backcurrent tx. awkward.
   (oset this :continue-go-loop t))
 
 (defmethod emsane-postop-donext ((this emsane-postop-queue))
@@ -211,9 +220,7 @@ if the queue is empty return nil."
             (progn
               (setq op  (emsane-postop-dequeue tx))
               (oset this :current-op op)
-              (emsane-postop-exec op tx this)
-              (emsane-postop-push this tx);;TODO shell ops are pushed back before actualy done, which is confusing
-              )
+              (emsane-postop-exec op tx this))
           (emsane-postop-donext this) ;;TODO really? recursion doesnt feel right when we have a complicated error condition...x
           ))))
 

@@ -335,6 +335,9 @@ try more of the postop stuff than the basic test."
                                            :size "a4"
                                            :page 1
                                            )
+                              :job (emsane-job-get "book")
+                              :job-id "testoid"
+                           
                            :postop-queue
                            (emsane-postop-queue "test_transaction_queue"
                                                 :default-directory dir
@@ -343,6 +346,43 @@ try more of the postop stuff than the basic test."
                                                 :error-hooks    (list (lambda () (error "test postop q error hook called"))))
                            ))
     ))
+
+
+(deftest emsane-filename-notify ()
+  ;;test that some weird loop or something doesnt happen on missing files
+  ;;but it wont catch file weirdly going missing during the transaction
+  (let*
+      ((q (emsane-postop-queue "test_transaction_queue"
+                                                   :default-directory "/tmp/"
+                                                   :process-buffer (get-buffer-create "*emsane postop test*")
+                                                   :lifo '()
+                                                   ;;:error-hooks    (list (lambda () (error "test postop q error hook called")))
+                                                   ))
+       (state
+        (emsane-process-state "test-proc-state"
+                              :section
+                              (emsane-section "test-settings"
+                                              :operation-list nil                                             
+                                              :scanner "test1"
+                                              :source 'duplex
+                                              :mode 'color
+                                              :resolution 300
+                                              ;;:parent nil ;;dont mess up this test with too much deps
+                                              :file-pattern "0100-%04d"
+                                              :image-type 'jpg
+                                              :size "a4"
+                                              :page 1
+                                              )
+                              :job (emsane-job-get "book")
+                              :job-id "testoid"
+                              :postop-queue
+                              q
+                              )))
+    (emsane-line-default-postop "/tmp/dummyfillethatdoesntexists.scan" q (emsane-section-get "book-body"))
+;;(emsane-filename-handler "/tmp/dummyfillethatdoesntexists.scan" state)
+    (emsane-postop-go q)
+    ))
+
 
 (defun emsane-killall-scanadf ()
   "when the process sentinel is buggy, emacs doesnt delete a

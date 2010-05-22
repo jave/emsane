@@ -139,22 +139,24 @@
   ;;(oset this :state result) ;;TODO "state" is currently used as a queue-killer, which doesnt happen atm
 
   ;;the case below is "tx killer", push the broken tx on an error queue for later examination, queue chugs on as usual
-  (unless (object-p (oref this :error-queue)) (oset this :error-queue (emsane-postop-lifo "errorq")))
+  (unless (object-p (oref this :error-queue)) (oset this :error-queue (emsane-postop-lifo "errorq"))) ;;TODO move to q initializer
 
   ;;the current tx must be removed from the queue, but, uh, only if were executing a shell op??
   ;;this is because a shell op is pushed back onto the queue before its actualy finished. hmmm.
-  ;;see donext.
+  ;;see donext. this sucks.
   (if (equal (object-class (oref this :current-op))  'emsane-postop-simple-shell-operation)
       (emsane-postop-dequeue this))
   
   ;;TODO :current-tx should be the complete failed transaction, not the same as the modified tx on top of the q, as it is now
-  (emsane-postop-push (oref this :current-tx) (oref this :current-op))
-  (emsane-postop-push (oref this :error-queue) (oref this :current-tx))
+  (emsane-postop-push (oref this :current-tx) (oref this :current-op));;push back the failed op on current tx
+  (emsane-postop-push (oref this :error-queue) (oref this :current-tx));;push failed tx on error q
+  
+
   (mapc #'funcall (oref this :error-hooks));;using run-hooks turned out not so good here
   (with-current-buffer (oref this :process-buffer)
     (insert (format "Non 0 return code from postop. This is bad.  result:%s" result)))
   (message (format "Non 0 return code from postop. This is bad.  result:%s" result))
-  (emsane-postop-go this)
+  (emsane-postop-go this);;TODO rather just set the continue-go
   )
 
 (defmethod emsane-postop-push ((this emsane-postop-lifo) object)
@@ -210,8 +212,10 @@ if the queue is empty return nil."
               (setq op  (emsane-postop-dequeue tx))
               (oset this :current-op op)
               (emsane-postop-exec op tx this)
-              (emsane-postop-push this tx));;TODO shell ops are pushed back before actualy done, which is confusing
-          (emsane-postop-donext this)))))
+              (emsane-postop-push this tx);;TODO shell ops are pushed back before actualy done, which is confusing
+              )
+          (emsane-postop-donext this) ;;TODO really? recursion doesnt feel right when we have a complicated error condition...x
+          ))))
 
 (defmethod emsane-postop-go ((this emsane-postop-queue))
   "start or continue executing transactions in queue."

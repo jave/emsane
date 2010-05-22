@@ -819,7 +819,8 @@ Argument MSG is the exit code."
 ;; scan finished?
 
 (defvar emsane-scan-file-ready-notifier 'emsane-scanadf-line-handler)
-(setq emsane-scan-file-ready-notifier 'emsane-scanadf-emacslient-notify)
+;;(setq emsane-scan-file-ready-notifier 'emsane-scanadf-emacslient-notify)
+
 (defvar emsane-scanadf-emacslient-path   "/home/joakim/.elisp/emsane/emsane-client.sh")
 
 ;;TODO define a class for notifiers, line-based or emacsclient-based

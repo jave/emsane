@@ -205,10 +205,9 @@
   (if tx-no-error
       (progn
         (emsane-postop-push this (oref this :current-tx));;push backcurrent tx if everything went ok. awkward.
-        ;;(emsane-process-buffer-message this "... Done.\n" )
-        (emsane-process-buffer-message this "... DONE env:%s\n"  (emsane-plist2env (oref (oref this :current-tx) environment)))        
+        (emsane-process-buffer-message this "... DONE! env:%s\n"  (emsane-plist2env (oref (oref this :current-tx) environment)))        
         )
-    (emsane-process-buffer-message this "... FAILED %s!!!.\n" tx-no-error))
+    (emsane-process-buffer-message this "... FAILED! %s!!!.\n" tx-no-error))
   (oset this :continue-go-loop t))
 
 (defmethod emsane-process-buffer-message ((this emsane-postop-queue) string &rest objects)
@@ -244,6 +243,8 @@ it is supposed to always be safe to call.";;TODO it isnt atm...
   (unless  (equal (oref this :continue-go-loop) 'waiting-for-shell-op)
       (let
           ((continue-go-loop t))
-        (while (and continue-go-loop (emsane-postop-hasnext this))
+        (while (and continue-go-loop
+                    (not (eq 'waiting-for-shell-op continue-go-loop))
+                    (emsane-postop-hasnext this)) ;;TODO continue-go-loop is madness atm
           (emsane-postop-donext this)
           (setq continue-go-loop (oref this :continue-go-loop))))))

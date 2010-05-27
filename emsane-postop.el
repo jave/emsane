@@ -64,7 +64,7 @@
 (defclass emsane-postop-lifo ()
   ((lifo :initarg :lifo
          :initform '()
-         :documentation "a lifo"))
+         :documentation "a LIFO, Last In First Out"))
   "base class for queue and transaction")
 
 (defclass emsane-postop-queue (emsane-postop-lifo)
@@ -90,9 +90,10 @@
         (progn
           (funcall (oref this :operation-lambda) tx q)
           (emsane-postop-push q tx);;push backcurrent tx. will be skipped if op fails
-          )
-      (error (emsane-postop-signal-error q lispop-error)))
-    ))
+          (emsane-process-buffer-message q "lisp-op:%s env:%s\n"
+                            (oref this :operation-lambda)
+                            (emsane-plist2env (oref tx environment))))
+      (error (emsane-postop-signal-error q lispop-error)))))
 
 (defmethod emsane-postop-exec ((this emsane-postop-simple-shell-operation) tx q)
   "execute shell operation"
@@ -104,14 +105,11 @@
        (post-process (start-file-process-shell-command
                       "postop"
                       proc-buf
-                      cmd
-                      )))
+                      cmd)))
     (set-process-sentinel post-process 'emsane-postop-sentinel)
     (process-put post-process 'queue q)
-    (with-current-buffer proc-buf
-      (insert (format "postprocessing:%s env:%s\n" cmd (emsane-plist2env (oref tx environment))))
-      )
-    (oset q :continue-go-loop nil)))
+    (emsane-process-buffer-message q "shell-op:%s env:%s ... \n" cmd (emsane-plist2env (oref tx environment)))
+    (oset q :continue-go-loop 'waiting-for-shell-op)))
 
 (defun emsane-plist2env (plist)
   "convert a plist to the env var format used by process-environment"
@@ -126,10 +124,10 @@
   "called when an image shell postop finishes"
   (let*
       ((queue (process-get process 'queue))
-       (tx-error (= 0 (process-exit-status process))))
-    (unless tx-error
+       (tx-no-error (= 0 (process-exit-status process))))
+    (unless tx-no-error
       (emsane-postop-signal-error queue result))
-    (emsane-postop-finish-shell-operation queue tx-error)
+    (emsane-postop-finish-shell-operation queue tx-no-error)
     (emsane-postop-go queue);;now continue processing queue transations
     ))
 
@@ -162,24 +160,28 @@
 
   (mapc #'funcall (oref this :error-hooks));;using run-hooks turned out not so good here
   (let*
-      ((msg (format "postop failed. result:%s tx:%s op:%s" result (oref this :current-tx) (oref this :current-op))))
-    (with-current-buffer (oref this :process-buffer)
-      (insert msg))
+      ((msg (format "postop failed. result:%s\n  tx:%s\n  op:%s" result (oref this :current-tx) (oref this :current-op))))
+    (emsane-process-buffer-message this msg)
     (message msg))
   )
 
 (defmethod emsane-postop-push ((this emsane-postop-lifo) object)
-  "push object on lifo"
-  (oset this :lifo
-        (cons object   (oref this :lifo))))
+  "Push object on the LIFO queue. New objects go at the head of the list."
+  (oset this :lifo (cons object   (oref this :lifo))))
+
+(defmethod emsane-postop-push ((this emsane-postop-queue) object)
+  "add some debugging output"
+  (call-next-method)
+  (emsane-process-buffer-message this "pushed on queue: %s\n" object))
+
 
 (defmethod emsane-postop-dequeue ((this emsane-postop-lifo))
-  "pop object from end of queue"
+  "Return object from the end of the LIFO  queue, and remove the element."
   (unless (emsane-postop-hasnext this) (error "poping an empty queue is bad"))
   (let
       ((rv (car (last (oref this :lifo)))))
-    (oset this :lifo
-          (nreverse (cdr (nreverse (oref this :lifo))))) ;;TODO
+    ;;(oset this :lifo (nreverse (cdr (nreverse (oref this :lifo)))));;TODO ugly implementation
+    (oset this :lifo (delq rv (oref this :lifo)))
     rv))
 
 (defmethod emsane-postop-hasnext ((this emsane-postop-lifo))
@@ -198,10 +200,20 @@
 (defmethod  emsane-postop-setenv ((this  emsane-postop-transaction) varname value)
   (oset this environment (plist-put (oref this environment) varname value)))
 
-(defmethod emsane-postop-finish-shell-operation ((this emsane-postop-queue) tx-error)
-  "finishup an ongoing shell operation"
-  (emsane-postop-push this (oref this :current-tx));;push backcurrent tx. awkward.
+(defmethod emsane-postop-finish-shell-operation ((this emsane-postop-queue) tx-no-error)
+  "finishup an ongoing shell operation, take care of error situation."
+  (if tx-no-error
+      (progn
+        (emsane-postop-push this (oref this :current-tx));;push backcurrent tx if everything went ok. awkward.
+        ;;(emsane-process-buffer-message this "... Done.\n" )
+        (emsane-process-buffer-message this "... DONE env:%s\n"  (emsane-plist2env (oref (oref this :current-tx) environment)))        
+        )
+    (emsane-process-buffer-message this "... FAILED %s!!!.\n" tx-no-error))
   (oset this :continue-go-loop t))
+
+(defmethod emsane-process-buffer-message ((this emsane-postop-queue) string &rest objects)
+    (with-current-buffer (oref this :process-buffer)
+      (insert (apply 'format (cons string objects)))))
 
 (defmethod emsane-postop-donext ((this emsane-postop-queue))
   "pops an operation from the current transaction in the queue and executes it.
@@ -221,14 +233,17 @@ if the queue is empty return nil."
               (setq op  (emsane-postop-dequeue tx))
               (oset this :current-op op)
               (emsane-postop-exec op tx this))
-          (emsane-postop-donext this) ;;TODO really? recursion doesnt feel right when we have a complicated error condition...x
+          (emsane-postop-donext this) ;;TODO really? recursion doesnt feel right when we might have a complicated error condition...
           ))))
 
 (defmethod emsane-postop-go ((this emsane-postop-queue))
-  "start or continue executing transactions in queue."
+  "start or continue executing transactions in queue.
+it is supposed to always be safe to call.";;TODO it isnt atm...
   (if (oref this state) (error "the queue is unwell:%s" (oref this state)))
-  (let
-      ((continue-go-loop t))
-    (while (and continue-go-loop (emsane-postop-hasnext this))
-      (emsane-postop-donext this)
-      (setq continue-go-loop (oref this :continue-go-loop)))))
+  (emsane-process-buffer-message this "cgloop:%s\n" (oref this :continue-go-loop)  )
+  (unless  (equal (oref this :continue-go-loop) 'waiting-for-shell-op)
+      (let
+          ((continue-go-loop t))
+        (while (and continue-go-loop (emsane-postop-hasnext this))
+          (emsane-postop-donext this)
+          (setq continue-go-loop (oref this :continue-go-loop))))))

@@ -161,7 +161,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; eieio class definitions
 
-;;TODO emsane-tracker isnt a stellar name, since we are named, tracked, and instance-inherited 
+;;TODO emsane-tracker isnt a stellar name, since we are named, tracked, and instance-inherited
 (defclass emsane-tracker (eieio-named
                           eieio-instance-tracker
                           )
@@ -183,8 +183,8 @@ there can only be one emsane-tracker object with a particular name.")
   "enable instance tracking also for clones."
   ;;we want clone for eieio-instance-inheritor to execute
   ;;also clone doesnt do object init, so so it explicitly
-  (assert (stringp (car params)) nil "1st arg to clone must be a new name!") 
-  (let ((theclone (call-next-method))) 
+  (assert (stringp (car params)) nil "1st arg to clone must be a new name!")
+  (let ((theclone (call-next-method)))
     (initialize-instance theclone)
     theclone))
 
@@ -259,12 +259,12 @@ there can only be one emsane-tracker object with a particular name.")
          :documentation "paper size")
    (page :initarg :page
          :documentation "section start page")
-   
+
    (scanner :initarg :scanner
-            :documentation "scanner name")   
+            :documentation "scanner name")
    (source :initarg :source
            :accessor emsane-section-get-source
-           :documentation "scanner source(duplex,simplex, etc)")   
+           :documentation "scanner source(duplex,simplex, etc)")
    (mode :initarg :mode
          :accessor emsane-section-get-mode
          :documentation "scanner mode(lineart,color etc)")
@@ -278,7 +278,7 @@ there can only be one emsane-tracker object with a particular name.")
                :accessor emsane-section-get-image-type
                :documentation "image type(djvu,jpeg)")
    (operation-list :initarg :operation-list :initform nil ;;TODO why do i have this initform in an interface?
-                   :documentation "A list of operations to be used for every image scanned in this section")   
+                   :documentation "A list of operations to be used for every image scanned in this section")
    )
   :abstract t )
 
@@ -326,7 +326,7 @@ there can only be one emsane-tracker object with a particular name.")
    (missing-files :initarg :missing-files)
    ;;per buffer
    (section :initarg :section)
-   (section-overide :initarg :section-overide :initform nil)   
+   (section-overide :initarg :section-overide :initform nil)
    (subsection :initarg :subsection)
    (page :initarg :page)
    )
@@ -349,7 +349,7 @@ there can only be one emsane-tracker object with a particular name.")
       (let*
           ((sv (slot-value this slot))
            (query-result nil))
-        
+
         (if (and (object-p sv) (object-of-class-p sv emsane-query))
             ;;if this exact query already was answered, return the previous value
             (if (assq sv emsane-query-recall)
@@ -368,7 +368,7 @@ there can only be one emsane-tracker object with a particular name.")
                            ((symbolp (oref this :parent)) (eval (oref this :parent)))
                            (t (error "needed parent, but wasnt object or symbol"))
                            )
-                          
+
                           slot));;ask the parent for the value
 
 
@@ -419,7 +419,7 @@ there can only be one emsane-tracker object with a particular name.")
           (t (error "get-scanner on %s should return object or string but doesnt" this)))))
 
 
-;; dealiases.  
+;; dealiases.
 ;;TODO probably needs support for more than 1 flag per mode/source/whatever
 ;;like image-type-options?
 
@@ -438,7 +438,7 @@ there can only be one emsane-tracker object with a particular name.")
   (let*
       ((buffer (get-buffer-create (format "*Emsane %s*" (oref this object-name)))))
     (with-current-buffer buffer
-      ;;dont reset locals if already in correct mode 
+      ;;dont reset locals if already in correct mode
       (unless (eq major-mode 'emsane-mode) (emsane-mode)))
     buffer))
 
@@ -526,9 +526,9 @@ Parent directories are created if needed."
   ;;ok, when :page in state is unbound, the section is queried
   ;;but, the section includes section-overide! and for fujitsu2 there is a query there, which is already answered
   ;;so page needs to be thoroughly reset in this mode
-  (slot-makeunbound (oref this :section-overide) :page) ;;section-overide should be somewhat reset as well. a bit too ungeneral for my taste
+  (if (oref this :section-overide)
+    (slot-makeunbound (oref this :section-overide) :page)) ;;section-overide should be somewhat reset as well. a bit too ungeneral for my taste
 
-  
   ;;then figure out the section
   (unless section
     (setq section (emsane-section-get
@@ -579,7 +579,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
           (condition-case nil (oref emsane-current-process-state :page)(error "?"))
           ))
 
-(defconst emsane-scan-file-suffix ".scan")
+(defconst emsane-scan-file-suffix ".scn")
 
 (defun emsane-scan-start (job job-id &optional start-section section-overide queue noreset)
   "start a new scan job."
@@ -620,7 +620,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
           (oset section-overide  :parent (oref this :section))
           (oset this :section section-overide))
       )))
-             
+
 
 
 (defun emsane-scan-continue (state)
@@ -668,14 +668,14 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                       0))
            ;;TODO this is for croping from center, which maybe not all adf scanners need.
            ;;for flatbeds, it would be: paperwidth
-           
+
            ;;(imgtype (emsane-section-get-image-type emsane-current-section))
 
            ;; only if hw supports it and only if jpg-color-hw option
            ;;normaly sane 1.0.20 must be recompiled to get get this
 
            ;; funnily the "fujitsu" requires --page-height, while the "brother" "test" and "epson" fails with it.
-           (page-height (if  (oref scanner :needs-pageheight) 
+           (page-height (if  (oref scanner :needs-pageheight)
                             (list "--page-height" (number-to-string paperheight))))
            (scanscript (if (equal emsane-scan-file-ready-notifier 'emsane-scanadf-emacslient-notify)
                            (list "--script-wait" "--scan-script" emsane-scanadf-emacslient-path)))
@@ -686,7 +686,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                    ,@options;;(emsane-get-options scanner  emsane-current-section) ;;scanner specific options
                    ,@scanscript
                    "--resolution"  ,(number-to-string resolution)
-                   "--output-file" ,(concat file-pattern emsane-scan-file-suffix) 
+                   "--output-file" ,(concat file-pattern emsane-scan-file-suffix)
                    "--start-count" ,(number-to-string startcount)
                    ,@(if (oref scanner :inhibit-adf) (list "--end-count" (number-to-string startcount) ))
                    "-l" ,(number-to-string topleft)
@@ -702,7 +702,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
            (dbg-process
             (format "scan command: %s\n" args
                     ;;(mapconcat (lambda (x) x) (cddr args) " ")
-                    
+
                     ))
            ;;TODO verify the type of each element of arg. no nil:s for instance
            ;;(all-not-nil  (mapconcat (lambda (x) (stringp x)) (cddr args) " "))
@@ -745,10 +745,14 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
-    (define-key map "n"           'emsane-set-section-buffer)
-    (define-key map "p"           'emsane-set-page-buffer)
-    (define-key map "d"           'emsane-dired-buffer)
+    (define-key map "n"           'emsane-set-section-buffer) ;;TODO "buffer" wasnt a good suffix to indicate use of local process state
+    (define-key map "p"           'emsane-set-page-buffer) ;;TODO "buffer" wasnt a good suffix to indicate use of local process state
+    (define-key map "d"           'emsane-dired-buffer);;TODO rename to emsane-jump-to-dired-buffer
     (define-key map "q"           'emsane-scan-quit)
+    ;;TODO keys:
+    ;;TODO these are the same keys also in postop and ctrl buffers
+;;    (define-key map "o"           'emsane-jump-to-postop-buffer)
+    ;;(define-key map "1"           'emsane-jump-to-scanner-buffer) ;;which should somehow use the key as argument, so 1 ... 9 jumps to scanners
     map)
   "Keymap for `emsane-mode'.")
 
@@ -768,7 +772,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   "check if a process is running in the current buffer"
   ;;the code is a little hard to read. (process-status) returns a symbol or throws an error
   ;; - if the symbol is 'run, there is a running symbol, the other symbols I assume to mean
-  ;; - if an 
+  ;; - if an
   (condition-case nil
       (if (equal 'run (process-status nil)) t nil)
     (error nil)))
@@ -778,7 +782,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   "quit running scan process"
   ;;TODO should also deal with buffer process state
   (interactive)
-  (if (emsane-process-running) 
+  (if (emsane-process-running)
       (delete-process (current-buffer))))
 
 
@@ -833,7 +837,7 @@ Argument MSG is the exit code."
   (with-current-buffer state-id
     (emsane-filename-handler filename emsane-current-process-state)))
 
-  
+
 
 (defun emsane-filter (proc string)
   "Filters scanadf output.
@@ -847,9 +851,10 @@ Argument STRING output from scanadf."
         ;; Insert the text, advancing the process marker.
         (goto-char (process-mark proc))
         ;;break up string in lines and handle each
+        ;;if we use the callback notifier this is handled elsewhere
         (if (equal emsane-scan-file-ready-notifier 'emsane-scanadf-line-handler)
             (mapc (lambda (line) (emsane-scanadf-line-handler line state))
-                  (split-string string "\n" t)))
+                  (split-string string "\n" t)));;TODO doesnt handle the case when lines are split "in the middle"
         (insert (format "filter:<<%s>>\n" ;;TODO should be possible to visit image files in the scanadf buffer!
                         (substring string 0 -1);;remove linefeed
                         ))
@@ -857,8 +862,6 @@ Argument STRING output from scanadf."
       (if moving (goto-char (process-mark proc))))))
 
 (defun emsane-scanadf-line-handler (string state)
-  ;;TODO I would like to support more scan notification methods.
-  ;;this one is coupled to scanadf, but emacsclient, or api variants are also desireable
   "Process a single line STRING of scanadf output."
     (cond
      ((string-match "Scanned document \\(.*\\)" string) ;;a string emitted by scanadf
@@ -866,12 +869,19 @@ Argument STRING output from scanadf."
      )))
 
 (defun emsane-filename-handler (filename state)
+  "Notify emsane a new FILENAME is available."
   (if (file-exists-p (concat (emsane-get-job-dir state) filename)) ;;check that the file really is there 1st
       (let*
           ((section (oref state :section)))
-        (emsane-line-default-postop filename (oref state :postop-queue) section)
-        (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename) 
-        (oset state  :page (+ 1 (string-to-number (match-string 2 filename)))))
+        ;;TODO add back old :operation-list support that didnt work
+        (emsane-postop-push (oref state :postop-queue) (emsane-mkpostop-default filename section))
+        (string-match (concat "\\([0-9a-zA-Z]*\\)-\\([0-9]*\\)" emsane-scan-file-suffix) filename)
+        (oset state  :page (+ 1 (string-to-number (match-string 2 filename))))
+
+        ;;TODO trying to both add files to the queue, and nudging the queue to run simply doesnt work
+        (emsane-postop-go (oref state :postop-queue))
+        ;;(if (oref state :continue-go-loop) (emsane-postop-go (oref state :postop-queue)))
+        )
     (emsane-postop-push (oref state :missing-files) filename)))
 
 (defun emsane-dired-notifier ()
@@ -886,7 +896,6 @@ Argument STRING output from scanadf."
                  emsane-current-process-state)) all-of-them)
     )
     ))
-  
 
 
 (setq emsane-dust-area-height 30)
@@ -900,11 +909,13 @@ Argument STRING output from scanadf."
   ;;- "dust dust.jpg" is added to tx, if it fails, transaction fails, job fails
   ;;- normal postprocessing of "image" (emsane-mkpostop-convert)
   (list
-   (emsane-postop-lisp-operation "size" :operation-lambda  (lambda (tx q)
-                                                             (emsane-postop-setenv tx
-                                                                                   'CROP_AT_Y
-                                                                                   (- (cdr (emsane-image-size (emsane-postop-getenv tx 'SCANFILE)))
-                                                                                      emsane-dust-area-height))))
+   (emsane-postop-lisp-operation
+    "size"
+    :operation-lambda  (lambda (tx q)
+                         (emsane-postop-setenv tx
+                                               'CROP_AT_Y
+                                               (- (cdr (emsane-image-size (emsane-postop-getenv tx 'SCANFILE)))
+                                                  emsane-dust-area-height))))
    (emsane-postop-simple-shell-operation "crop-dust"  :operation-shell-command "convert +repage -crop +0+${CROP_AT_Y} ${SCANFILE} ${SCANFILE}.dust" )
    (emsane-postop-simple-shell-operation "crop-img"   :operation-shell-command (format "convert +repage -crop 0x0+0-%s ${SCANFILE} ${SCANFILE}"
                                                                                        emsane-dust-area-height) )
@@ -912,28 +923,18 @@ Argument STRING output from scanadf."
    (emsane-postop-simple-shell-operation "dust"  :operation-shell-command "dust ${SCANFILE}.dust"))
   )
 
-(defun emsane-line-default-postop (filename postop-queue section)
-  ;;begin tx
+(defun emsane-mkpostop-default (filename  section)
   (let*
-      ((tx (emsane-postop-transaction "tx"))
-       (op-list (oref section :operation-list)))
+      ((tx (emsane-postop-transaction "tx")))
     (emsane-postop-setenv tx 'SCANFILE filename)
     (emsane-postop-setenv tx 'SCANFILEBASE (substring filename 0 ( - (length emsane-scan-file-suffix))))
-    (if (null op-list) ;;nil currently means do a default conversion
-        (progn
-          ;;push a default op:s for now. these converts and deletes original.
-          (emsane-postop-push tx (emsane-mkpostop-convert section))        
-          (emsane-postop-push tx (emsane-postop-lisp-operation "op"
-                                                               :operation-lambda
-                                                               (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE))))))
-      ;;TODO else push the op-list, assume "dust" now EXPERIMENTAL
-      (mapc (lambda (x)
-                (emsane-postop-push tx x))
-              (emsane-mkpostop-dustdetect section)))
-    (emsane-postop-push postop-queue tx)
-    ;;end tx
-    (emsane-postop-go postop-queue)
-  ))
+    ;;push default op:s. these converts and deletes original.
+    (emsane-postop-push tx (emsane-mkpostop-convert section))
+    (emsane-postop-push tx (emsane-postop-lisp-operation
+                            "op"
+                            :operation-lambda
+                            (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE)))))
+    tx))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -944,11 +945,10 @@ Argument STRING output from scanadf."
 
 
 (defun emsane-mk-conversion-command (filenamebase current-suffix type desired-type)
-  "produce a command line string to convert FILENAME from TYPE to DESIRED-TYPE.
-FILENAME is currently assumed have a .scan suffix"
+  "Produce a command line string to convert FILENAMEBASE from TYPE to DESIRED-TYPE.
+FILENAMEBASE concatenated with CURRENT-SUFFIX gives the concrete file name."
   (let*
       ((filename (concat filenamebase current-suffix))
-       ;;(filenamebase (substring filename 0 ( -(length emsane-scan-file-suffix))));;this removes the ".scan" suffix
        (replacesuffix (cadr (assoc desired-type emsane-image-type-suffixes)))
        (suffix (if replacesuffix replacesuffix desired-type)))
     (cond
@@ -956,36 +956,29 @@ FILENAME is currently assumed have a .scan suffix"
       (format
        "cp %s %s.%s"  filename filenamebase suffix));;cp is for concistency, TODO find more efficient way
      ((eq desired-type 'djvu)
-      (format
-       "cjb2 -lossy %s %s.%s" filename  filenamebase suffix))
+      (format "cjb2 -lossy %s %s.%s" filename  filenamebase suffix))
      ((eq desired-type 'djvu-color)
-      (format
-       "c44 %s %s.%s" filename  filenamebase suffix))
+      (format "c44 %s %s.%s" filename  filenamebase suffix))
      ((eq desired-type 'jpg-gray)
-      (format
-       "convert -type Grayscale %s %s.%s"  filename  filenamebase suffix))
+      (format "convert -type Grayscale %s %s.%s"  filename  filenamebase suffix))
      ((eq desired-type 'jpg-color)
-      (format
-       "convert %s %s.%s"  filename  filenamebase suffix))
+      (format "convert %s %s.%s"  filename  filenamebase suffix))
      (t
-      (format
-       "convert %s %s.%s"   filename  filenamebase suffix)))))
+      (format "convert %s %s.%s"   filename  filenamebase suffix)))))
 
 
 (defun emsane-mkpostop-convert (section)
   "mk conversion postop"
   (let*
       ((imgtype (emsane-get-image-type section))
-       (actual-img (emsane-get-actual-image-type (emsane-get-scanner section) imgtype)
-                   )
+       (actual-img (emsane-get-actual-image-type (emsane-get-scanner section) imgtype))
        (convcmd (emsane-mk-conversion-command
                  "${SCANFILEBASE}"
                  emsane-scan-file-suffix
                  actual-img
                  imgtype)))
-    (emsane-postop-simple-shell-operation
-     "op1"
-     :operation-shell-command convcmd)))
+    (emsane-postop-simple-shell-operation "op1"
+                                          :operation-shell-command convcmd)))
 
 (defun emsane-image-size (image-file)
   "Return the size of IMAGE-FILE as a cons."
@@ -1009,4 +1002,3 @@ FILENAME is currently assumed have a .scan suffix"
 (provide 'emsane)
 
 ;;; emsane.el ends here
-

@@ -73,17 +73,25 @@
       ((q  (emsane-postop-queue "tq"))
        (pushed1 'a)
        (pushed2 'b)
-       (push-r1 (emsane-postop-push q pushed1))
-       (push-r2 (emsane-postop-push q pushed2))
+       (pushed3 'c)
        (poped1)
        (poped2)
+       (poped3)
        )
+    (emsane-postop-push q pushed1) ;;(a)
+    (emsane-postop-push q pushed2);;(b a)
     (should (emsane-postop-hasnext q))
-    (setq poped1 (emsane-postop-dequeue q))
+    (setq poped1 (emsane-postop-dequeue q));;a (b)
     (should (equal pushed1 poped1))
     (should (emsane-postop-hasnext q))
-    (setq poped2 (emsane-postop-dequeue q))    
+    (emsane-postop-push q pushed3);;(c b)
+    (setq poped2 (emsane-postop-dequeue q));;b (c)    
     (should (equal pushed2 poped2))
+
+    (setq poped3 (emsane-postop-dequeue q));;c ()    
+    (should (equal pushed3 poped3))
+
+    ;;now the q is empty
     (should-not (emsane-postop-hasnext q))
     (should-error (emsane-postop-dequeue q))
     ))
@@ -114,6 +122,7 @@
     (emsane-postop-push tx op)
     (emsane-postop-push q tx)
     (oset q :default-directory "/tmp")
+    (oset q :process-buffer (get-buffer-create "*emsane postop test*"))
     (emsane-postop-go q)
     (should (equal  result (emsane-postop-getenv tx varname)))
     )
@@ -137,7 +146,7 @@
     (emsane-postop-setenv tx 'TESTVAR "W00T")
     (emsane-postop-setenv tx 'TOASTVAR "AAH")
     (emsane-postop-push q tx)
-    (oset q :process-buffer "*emsane postop*")
+    (oset q :process-buffer (get-buffer-create "*emsane postop test*"))
     (oset q :default-directory  "/tmp")
     (emsane-postop-go q)
     ;;"w00tw00t" and "W00T ... AAH" should appear in the postproc buf TODO verify this
@@ -349,6 +358,7 @@ try more of the postop stuff than the basic test."
 
 
 (deftest emsane-filename-notify ()
+  ;;TODO asks for "scanner" which it shouldnt
   ;;test that some weird loop or something doesnt happen on missing files
   ;;but it wont catch file weirdly going missing during the transaction
   (let*
@@ -360,7 +370,7 @@ try more of the postop stuff than the basic test."
                                                    ))
        (state
         (emsane-process-state "test-proc-state"
-                              :section
+                              :section-overide
                               (emsane-section "test-settings"
                                               :operation-list nil                                             
                                               :scanner "test1"
@@ -427,9 +437,7 @@ emsane-declare-instance-get worked as expected"
 
 
 ;;;;;;;;;;;;;;;;;;INTERACTIVE TESTS
-;; they prompt the user and i havent found a way to simulate it yet.
-;;to run t
-;;xdootool might be used to simulate keypresses
+;;xdotool might be used to simulate keypresses
 ;;(ert-run-tests-interactively "^emsanei-" " *emsane self-tests*")
 (deftest emsanei-type-a4()
   "type a4"

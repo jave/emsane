@@ -385,9 +385,11 @@ there can only be one emsane-tracker object with a particular name.")
 (defmethod emsane-get-page ((this emsane-process-state) section)
   "accessor for a sections page slot, supports prompting and recall"
   (let*
-      ((startnum (emsane-handle-slot section 'page)))
+      ((startnum (emsane-handle-slot section 'page))
+       )
     (cond
-     ((eq 'continue startnum)  (oref this :page ))
+     ((eq 'continue startnum)  (if (slot-boundp this :page) (oref this :page )
+                                 (emsane-do-query (emsane-query-integer "gimmeint" :prompt "Page number(1st continue)" :default 1))))
      (t startnum))))
 
 (defmethod emsane-get-file-pattern ((this emsane-section-interface))
@@ -521,11 +523,7 @@ Parent directories are created if needed."
 
 (defmethod emsane-set-section ((this emsane-process-state) &optional section)
   "Set section. if SECTION is nil, prompt for one."
-  ;;1st reset state
-  (slot-makeunbound this :page) ;;this isnt sufficient!
-  ;;ok, when :page in state is unbound, the section is queried
-  ;;but, the section includes section-overide! and for fujitsu2 there is a query there, which is already answered
-  ;;so page needs to be thoroughly reset in this mode
+
   (if (oref this :section-overide)
     (slot-makeunbound (oref this :section-overide) :page)) ;;section-overide should be somewhat reset as well. a bit too ungeneral for my taste
 
@@ -537,6 +535,17 @@ Parent directories are created if needed."
   (oset this :section section)
   ;;then take care of section overides
   (emsane-fixup-section-chain this)
+
+  ;;now handle page
+
+  (unless (equal (oref section :page) 'continue)
+    (slot-makeunbound this :page))
+  ;;ok, when :page in state is unbound, the section is queried
+  ;;but, the section includes section-overide! and for fujitsu2 there is a query there, which is already answered
+  ;;so page needs to be thoroughly reset in this mode
+
+  
+  
   )
 
 (defmethod emsane-set-page ((this emsane-process-state) &optional page)
@@ -750,6 +759,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
     (define-key map "d"           'emsane-dired-buffer);;TODO rename to emsane-jump-to-dired-buffer
     (define-key map "q"           'emsane-scan-quit)
     ;;TODO keys:
+    ;;(define-key map "a"           'emsane-add-scanner-buffer) ;;add a new scanner, if single scanner job, become multi scan job
     ;;TODO these are the same keys also in postop and ctrl buffers
 ;;    (define-key map "o"           'emsane-jump-to-postop-buffer)
     ;;(define-key map "1"           'emsane-jump-to-scanner-buffer) ;;which should somehow use the key as argument, so 1 ... 9 jumps to scanners

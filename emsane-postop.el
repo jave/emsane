@@ -211,6 +211,7 @@
   (oset this :continue-go-loop t))
 
 (defmethod emsane-process-buffer-message ((this emsane-postop-queue) string &rest objects)
+  ;;TODO should have its own insert marker, so moving the cursor doesnt break output
     (with-current-buffer (oref this :process-buffer)
       (insert (apply 'format (cons string objects)))))
 

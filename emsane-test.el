@@ -388,7 +388,7 @@ try more of the postop stuff than the basic test."
                               :postop-queue
                               q
                               )))
-    (emsane-line-default-postop "/tmp/dummyfillethatdoesntexists.scan" q (emsane-section-get "book-body"))
+    (emsane-mkpostop-default "/tmp/dummyfillethatdoesntexists.scn" (emsane-section-get "book-body"))
 ;;(emsane-filename-handler "/tmp/dummyfillethatdoesntexists.scan" state)
     (emsane-postop-go q)
     ))

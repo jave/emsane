@@ -553,7 +553,7 @@ Parent directories are created if needed."
   (oset this :page page)
   )
 
-(defmethod emsane-dired ((this emsane-process-state) )
+(defmethod emsane-jump-to-dired ((this emsane-process-state) )
   (dired (emsane-get-job-dir this)))
 
 (defun emsane-parse-paper-size (size-string sizes)
@@ -732,20 +732,22 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 ;; mode setup
 ;;TODO do something about these tedious wrappers, like a macro on defmethod or somesuch
 
-(defun emsane-set-section-buffer ()
+;; "-cps" means "-current-process-state" which is a buffer local
+
+(defun emsane-set-section-cps ()
   (interactive)
   (emsane-set-section emsane-current-process-state)
   )
 
-(defun emsane-set-page-buffer ()
+(defun emsane-set-page-cps ()
   (interactive)
   (emsane-set-page emsane-current-process-state)
   )
 
-(defun emsane-dired-buffer ()
+(defun emsane-jump-to-dired-cps ()
   "Dired the current scan project."
   (interactive)
-  (emsane-dired emsane-current-process-state))
+  (emsane-jump-to-dired emsane-current-process-state))
 
 
 
@@ -754,9 +756,9 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
-    (define-key map "n"           'emsane-set-section-buffer) ;;TODO "buffer" wasnt a good suffix to indicate use of local process state
-    (define-key map "p"           'emsane-set-page-buffer) ;;TODO "buffer" wasnt a good suffix to indicate use of local process state
-    (define-key map "d"           'emsane-dired-buffer);;TODO rename to emsane-jump-to-dired-buffer
+    (define-key map "n"           'emsane-set-section-cps) ;;TODO "buffer" wasnt a good suffix to indicate use of local process state
+    (define-key map "p"           'emsane-set-page-cps) ;;TODO "buffer" wasnt a good suffix to indicate use of local process state
+    (define-key map "d"           'emsane-jump-to-dired-cps);;TODO rename to emsane-jump-to-dired-buffer
     (define-key map "q"           'emsane-scan-quit)
     ;;TODO keys:
     ;;(define-key map "a"           'emsane-add-scanner-buffer) ;;add a new scanner, if single scanner job, become multi scan job

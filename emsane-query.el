@@ -57,7 +57,7 @@
 
 (defmethod emsane-query-default ((this emsane-query))
   (if (slot-boundp this :default)
-      (oref this :default)));;TODO also check if its an expression to be evaluated(for pagenum for instance)
+      (oref this :default)));;TODO also check if its an expression to be evaluated(for page for instance)
 
 (defmethod emsane-query-promptstring ((this emsane-query))
   (format "%s:" (oref this :prompt))
@@ -141,23 +141,31 @@ VALUES is a list of strings."
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-(defun emsane-ask-subsection ()
-  "prompt for a subsection number"
-  (read-number "subsection of next scan: "  (+ 1 emsane-subsection)))
-
-
-(defun emsane-ask (prompt values );;&optional validator
-  "Ask with PROMPT to select from VALUES.
-VALUES is an assoc list."
-  (completing-read (format "%s:" prompt)
-                   (mapcar (lambda (x) (car x)) values)
-                   nil)
-  ;;TODO validate user input somehow.
-  ;;its not perfectly obvious how, since "size" for instance can be a size string like "XxY" or "A4"
-  ;; call "validator" here, if fail, re-read user input
+(defmethod emsane-set-page ((this emsane-process-state) &optional page)
+  (unless page (setq page (read-number "page:")))
+  (oset this :page page)
   )
+
+(defmethod emsane-set-subsection ((this emsane-process-state) &optional subsection)
+  (unless subsection (setq subsection (read-number "subsection:")))
+  (oset this :subsection subsection))
+
+
+;; (defun emsane-ask-subsection ()
+;;   "prompt for a subsection number"
+;;   (read-number "subsection of next scan: "  (+ 1 emsane-subsection)))
+
+
+;; (defun emsane-ask (prompt values );;&optional validator
+;;   "Ask with PROMPT to select from VALUES.
+;; VALUES is an assoc list."
+;;   (completing-read (format "%s:" prompt)
+;;                    (mapcar (lambda (x) (car x)) values)
+;;                    nil)
+;;   ;;TODO validate user input somehow.
+;;   ;;its not perfectly obvious how, since "size" for instance can be a size string like "XxY" or "A4"
+;;   ;; call "validator" here, if fail, re-read user input
+;;   )
 
 
 (defun emsane-read-values (template)

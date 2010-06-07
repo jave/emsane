@@ -327,7 +327,7 @@ there can only be one emsane-tracker object with a particular name.")
    ;;per buffer
    (section :initarg :section)
    (section-overide :initarg :section-overide :initform nil)
-   (subsection :initarg :subsection)
+   (subsection :initarg :subsection :initform 0)
    (page :initarg :page)
    )
   )
@@ -548,10 +548,6 @@ Parent directories are created if needed."
   
   )
 
-(defmethod emsane-set-page ((this emsane-process-state) &optional page)
-  (unless page (setq page (read-number "page:")))
-  (oset this :page page)
-  )
 
 (defmethod emsane-jump-to-dired ((this emsane-process-state) )
   (dired (emsane-get-job-dir this)))
@@ -744,6 +740,12 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (emsane-set-page emsane-current-process-state)
   )
 
+(defun emsane-set-subsection-cps ()
+  (interactive)
+  (emsane-set-subsection emsane-current-process-state)
+  )
+
+
 (defun emsane-jump-to-dired-cps ()
   "Dired the current scan project."
   (interactive)
@@ -756,9 +758,10 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
-    (define-key map "n"           'emsane-set-section-cps) ;;TODO "buffer" wasnt a good suffix to indicate use of local process state
-    (define-key map "p"           'emsane-set-page-cps) ;;TODO "buffer" wasnt a good suffix to indicate use of local process state
-    (define-key map "d"           'emsane-jump-to-dired-cps);;TODO rename to emsane-jump-to-dired-buffer
+    (define-key map "n"           'emsane-set-section-cps) 
+    (define-key map "p"           'emsane-set-page-cps)
+    (define-key map "i"           'emsane-set-subsection-cps) ;; i for index?
+    (define-key map "d"           'emsane-jump-to-dired-cps)
     (define-key map "q"           'emsane-scan-quit)
     ;;TODO keys:
     ;;(define-key map "a"           'emsane-add-scanner-buffer) ;;add a new scanner, if single scanner job, become multi scan job
@@ -814,7 +817,8 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (concat  (format "01%02d" emsane-subsection) "-%04d" ))
 
 (defmacro emsane-subsection-filepattern-lambda (section)
-  `(lambda ()   (concat  (format "%02d%02d" ,section  emsane-subsection) "-%04d" )))
+  `(lambda ()   (concat  (format "%02d%02d" ,section
+                                 (oref emsane-current-process-state :subsection)) "-%04d" )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -68,7 +68,7 @@
       ((object-list-symbol (intern (format "emsane-%s-list" (oref this :object-type))))
        (object-history-symbol (intern (format "emsane-%s-history" (oref this :object-type))))
        (object-names (mapcar (lambda (x)  (oref x :object-name))  (eval object-list-symbol)))
-       (final-object-name (completing-read (emsane-query-promptstring this)
+       (final-object-name (ido-completing-read (emsane-query-promptstring this)
                                          object-names
                                          nil
                                          t
@@ -88,7 +88,7 @@
   "Ask with PROMPT to select from VALUES.
 VALUES is an assoc list."
   (let*
-      ((user-input (completing-read (emsane-query-promptstring this)
+      ((user-input (ido-completing-read (emsane-query-promptstring this)
                    (mapcar (lambda (x) (car x)) (oref this :values))
                    nil
                    (oref this :require-match)
@@ -108,7 +108,7 @@ VALUES is an assoc list."
   "Ask with PROMPT to select from VALUES.
 VALUES is an assoc list."
   (let*
-      ((user-input (completing-read (emsane-query-promptstring this)
+      ((user-input (ido-completing-read (emsane-query-promptstring this)
                    (mapcar (lambda (x) (symbol-name x)) (oref this :values))
                    nil
                    t
@@ -122,7 +122,7 @@ VALUES is an assoc list."
   "Ask with PROMPT to select from VALUES.
 VALUES is a list of strings."
   (let*
-      ((user-input (completing-read (emsane-query-promptstring this)
+      ((user-input (ido-completing-read (emsane-query-promptstring this)
                                     (oref this :values)
                    nil
                    (oref this :require-match)
@@ -141,14 +141,6 @@ VALUES is a list of strings."
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defmethod emsane-set-page ((this emsane-process-state) &optional page)
-  (unless page (setq page (read-number "page:")))
-  (oset this :page page)
-  )
-
-(defmethod emsane-set-subsection ((this emsane-process-state) &optional subsection)
-  (unless subsection (setq subsection (read-number "subsection:")))
-  (oset this :subsection subsection))
 
 
 ;; (defun emsane-ask-subsection ()

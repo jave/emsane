@@ -108,7 +108,7 @@
                       cmd)))
     (set-process-sentinel post-process 'emsane-postop-sentinel)
     (process-put post-process 'queue q)
-    (emsane-process-buffer-message q "shell-op:%s env:%s ... \n" cmd (emsane-plist2env (oref tx environment)))
+    (emsane-process-buffer-message q "shell-op:%s env:%s ..." cmd (emsane-plist2env (oref tx environment)))
     (oset q :continue-go-loop 'waiting-for-shell-op)))
 
 (defun emsane-plist2env (plist)
@@ -172,7 +172,8 @@
 (defmethod emsane-postop-push ((this emsane-postop-queue) object)
   "add some debugging output"
   (call-next-method)
-  (emsane-process-buffer-message this "pushed on queue: %s\n" object))
+  ;;(emsane-process-buffer-message this "pushed on queue: %s\n" object)
+  )
 
 
 (defmethod emsane-postop-dequeue ((this emsane-postop-lifo))
@@ -215,6 +216,11 @@
     (with-current-buffer (oref this :process-buffer)
       (insert (apply 'format (cons string objects)))))
 
+(defmethod emsane-process-buffer-insert ((this emsane-postop-queue) string &rest objects)
+  ;;TODO should have its own insert marker, so moving the cursor doesnt break output
+    (with-current-buffer (oref this :process-buffer)
+      (insert (apply 'format (cons string objects)))))
+
 (defmethod emsane-postop-donext ((this emsane-postop-queue))
   "pops an operation from the current transaction in the queue and executes it.
 continue with the 1st op of the next transaction if the current transaction is finished.
@@ -240,7 +246,7 @@ if the queue is empty return nil."
   "start or continue executing transactions in queue.
 it is supposed to always be safe to call.";;TODO it isnt atm...
   (if (oref this state) (error "the queue is unwell:%s" (oref this state)))
-  (emsane-process-buffer-message this "cgloop:%s\n" (oref this :continue-go-loop)  )
+  ;;(emsane-process-buffer-message this "cgloop:%s\n" (oref this :continue-go-loop)  )
   (unless  (equal (oref this :continue-go-loop) 'waiting-for-shell-op)
       (let
           ((continue-go-loop t))

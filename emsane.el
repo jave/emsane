@@ -67,6 +67,10 @@
   "Command to execute when scanner needs attention."
   :group 'emsane)
 
+(defcustom emsane-backend-supports-compression t
+  "If your SANE installation is compiled with compression support, set to t."
+  :group 'emsane)
+
 (defvar emsane-paper-sizes
   "A list of paper sizes. Its also possible to add local size aliases to a section job,
  for instance for magazines which come in different sizes." )
@@ -400,6 +404,17 @@ there can only be one emsane-tracker object with a particular name.")
       pattern
       )))
 
+;;TODO these are query methods(because they ask the user stuff) so should go in the query file
+(defmethod emsane-set-page ((this emsane-process-state) &optional page)
+  (unless page (setq page (read-number "page:")))
+  (oset this :page page)
+  )
+
+(defmethod emsane-set-subsection ((this emsane-process-state) &optional subsection)
+  (unless subsection (setq subsection (read-number "subsection:")))
+  (oset this :subsection subsection))
+
+
 ;;TODO refactor get-source and get-mode
 (defmethod emsane-get-source ((this emsane-section-interface))
   (let*
@@ -467,8 +482,10 @@ there can only be one emsane-tracker object with a particular name.")
   (cdr (assoc image-type (oref this :image-type-options))))
 
 (defmethod  emsane-get-actual-image-type ((this emsane-scanner) image-type)
-  "Give the actual image type a scanner produces, for a given image type."
+  "Give the actual image type a scanner produces, for a given IMAGE-TYPE."
   (let ((actual-img-type  (cadr (emsane-get-image-type-options this image-type))))
+    ;;unless told otherwise scanadf produces .pnm files
+    ;;scanadf can also produce .jpg if your scanner and Sane build allows it 
     (unless actual-img-type (setq actual-img-type 'pnm))
     actual-img-type))
 
@@ -525,12 +542,12 @@ Parent directories are created if needed."
   "Set section. if SECTION is nil, prompt for one."
 
   (if (oref this :section-overide)
-    (slot-makeunbound (oref this :section-overide) :page)) ;;section-overide should be somewhat reset as well. a bit too ungeneral for my taste
+      (slot-makeunbound (oref this :section-overide) :page)) ;;section-overide should be somewhat reset as well. a bit too ungeneral for my taste
 
   ;;then figure out the section
   (unless section
     (setq section (emsane-section-get
-                   (emsane-do-query (emsane-query-string "gimmesectio" :prompt "Section" :values (oref (oref this :job) :section-list))))))
+                   (emsane-do-query (emsane-query-string "gimmesection" :prompt "Section" :values (oref (oref this :job) :section-list))))))
   ;;then set it
   (oset this :section section)
   ;;then take care of section overides
@@ -613,7 +630,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
     (unless noreset     (emsane-query-recall-reset))     ;;TODO dont reset in the multi-scan case wtf...
     (emsane-fixup-section-chain state)
     (emsane-scan state))
-    )
+  )
 
 (defmethod emsane-fixup-section-chain ((this emsane-process-state))
   ;;:section-overide must be put in :section, and :section be made parent
@@ -662,6 +679,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
            (dealiased-mode (emsane-get-mode section))
            (file-pattern (emsane-get-file-pattern section))
            (startcount  (if (slot-boundp this :page) (oref this :page) (emsane-get-page this section)))
+           (dummy-startcount (oset this :page startcount)) ;;i suppose these "dummy" bindings arent stellar
            (imgtype (emsane-get-image-type section))
            (size (emsane-get-size section))
            (paperwidth (car size))
@@ -758,15 +776,16 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
+    (define-key map "m"           'emsane-multi-scan-start)    
     (define-key map "n"           'emsane-set-section-cps) 
     (define-key map "p"           'emsane-set-page-cps)
-    (define-key map "i"           'emsane-set-subsection-cps) ;; i for index?
+    (define-key map "i"           'emsane-set-subsection-cps) ;; i for index
     (define-key map "d"           'emsane-jump-to-dired-cps)
     (define-key map "q"           'emsane-scan-quit)
     ;;TODO keys:
     ;;(define-key map "a"           'emsane-add-scanner-buffer) ;;add a new scanner, if single scanner job, become multi scan job
     ;;TODO these are the same keys also in postop and ctrl buffers
-;;    (define-key map "o"           'emsane-jump-to-postop-buffer)
+    ;;    (define-key map "o"           'emsane-jump-to-postop-buffer)
     ;;(define-key map "1"           'emsane-jump-to-scanner-buffer) ;;which should somehow use the key as argument, so 1 ... 9 jumps to scanners
     map)
   "Keymap for `emsane-mode'.")
@@ -804,17 +823,17 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;subsection support
 
-(defun emsane-set-subsection (subsection)
-  "set subsection counter"
-  (interactive (list (emsane-ask-subsection)))
-  (setq emsane-subsection subsection)
-  (emsane-set-page 1)
-  )
+;; (defun emsane-set-subsection (subsection)
+;;   "set subsection counter"
+;;   (interactive (list (emsane-ask-subsection)))
+;;   (setq emsane-subsection subsection)
+;;   (emsane-set-page 1)
+;;   )
 
-(defun emsane-subsection-filepattern ()
-  "used in configs when you want a subsection counter"
-  ;;TODO support section id
-  (concat  (format "01%02d" emsane-subsection) "-%04d" ))
+;; (defun emsane-subsection-filepattern ()
+;;   "used in configs when you want a subsection counter"
+;;   ;;TODO support section id
+;;   (concat  (format "01%02d" emsane-subsection) "-%04d" ))
 
 (defmacro emsane-subsection-filepattern-lambda (section)
   `(lambda ()   (concat  (format "%02d%02d" ,section
@@ -879,10 +898,10 @@ Argument STRING output from scanadf."
 
 (defun emsane-scanadf-line-handler (string state)
   "Process a single line STRING of scanadf output."
-    (cond
-     ((string-match "Scanned document \\(.*\\)" string) ;;a string emitted by scanadf
-      (emsane-filename-handler (match-string 1 string) state)
-     )))
+  (cond
+   ((string-match "Scanned document \\(.*\\)" string) ;;a string emitted by scanadf
+    (emsane-filename-handler (match-string 1 string) state)
+    )))
 
 (defun emsane-filename-handler (filename state)
   "Notify emsane a new FILENAME is available."
@@ -904,13 +923,13 @@ Argument STRING output from scanadf."
   ;;adding files from dired, mostly for debugging
   (interactive)
   (let* ((all-of-them (dired-get-marked-files t)
-          ))
+                      ))
     (with-current-buffer "*Emsane fujitsu2*";;TODO interactive
-        (mapc (lambda (filename)
-                (emsane-filename-handler
-                 filename
-                 emsane-current-process-state)) all-of-them)
-    )
+      (mapc (lambda (filename)
+              (emsane-filename-handler
+               filename
+               emsane-current-process-state)) all-of-them)
+      )
     ))
 
 
@@ -939,18 +958,50 @@ Argument STRING output from scanadf."
    (emsane-postop-simple-shell-operation "dust"  :operation-shell-command "dust ${SCANFILE}.dust"))
   )
 
+(defvar emsane-postop-thumbnail nil "View thumbnails in postop
+buffer. Is cpu intensive, and requires ImageMagick support in
+Emacs")
+
+(defun emsane-toggle-postop-thumbnail ()
+  (interactive)
+  (if  emsane-postop-thumbnail
+      (setq emsane-postop-thumbnail nil)
+    (setq emsane-postop-thumbnail t)))
+
 (defun emsane-mkpostop-default (filename  section)
   (let*
       ((tx (emsane-postop-transaction "tx")))
     (emsane-postop-setenv tx 'SCANFILE filename)
     (emsane-postop-setenv tx 'SCANFILEBASE (substring filename 0 ( - (length emsane-scan-file-suffix))))
+    (emsane-postop-setenv tx 'SCANFILECONVERTED (format "%s.%s"
+                                                        (emsane-postop-getenv tx 'SCANFILEBASE)
+                                                        (emsane-get-image-type section)))
     ;;push default op:s. these converts and deletes original.
     (emsane-postop-push tx (emsane-mkpostop-convert section))
     (emsane-postop-push tx (emsane-postop-lisp-operation
                             "op"
                             :operation-lambda
                             (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE)))))
+    (if emsane-postop-thumbnail (emsane-postop-push tx (emsane-postop-lisp-operation ;;TODO flag croping with defcustom
+                                                        "crop"
+                                                        :operation-lambda
+                                                        `(lambda (tx q)
+                                                           (with-current-buffer (oref q :process-buffer)
+                                                             (emsane-insert-crop (concat (oref q :default-directory) (emsane-postop-getenv tx 'SCANFILECONVERTED))))))))
+    ;;TODO .jpg is hardcoded
     tx))
+
+;;this is highly experimental and relies on the imagemagick branch of emacs
+;; even an undocumented interface in the branch :)
+(defun emsane-insert-crop (filename)
+  (let ((start (point)))
+    (insert filename)
+    (add-text-properties start (point)
+                         `(display
+                           (image :type imagemagick :file ,filename :crop (10000 40 0 0) )
+                           help-echo ,filename
+                           rear-nonsticky (display)))
+    (insert "\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -962,13 +1013,13 @@ Argument STRING output from scanadf."
 
 (defun emsane-mk-conversion-command (filenamebase current-suffix type desired-type)
   "Produce a command line string to convert FILENAMEBASE from TYPE to DESIRED-TYPE.
-FILENAMEBASE concatenated with CURRENT-SUFFIX gives the concrete file name."
+FILENAMEBASE concatenated with CURRENT-SUFFIX gives the current concrete file name."
   (let*
       ((filename (concat filenamebase current-suffix))
        (replacesuffix (cadr (assoc desired-type emsane-image-type-suffixes)))
        (suffix (if replacesuffix replacesuffix desired-type)))
     (cond
-     ((equal desired-type type )
+     ((equal desired-type type)
       (format
        "cp %s %s.%s"  filename filenamebase suffix));;cp is for concistency, TODO find more efficient way
      ((eq desired-type 'djvu)
@@ -987,11 +1038,11 @@ FILENAMEBASE concatenated with CURRENT-SUFFIX gives the concrete file name."
   "mk conversion postop"
   (let*
       ((imgtype (emsane-get-image-type section))
-       (actual-img (emsane-get-actual-image-type (emsane-get-scanner section) imgtype))
+       (actual-imgtype (emsane-get-actual-image-type (emsane-get-scanner section) imgtype))
        (convcmd (emsane-mk-conversion-command
                  "${SCANFILEBASE}"
                  emsane-scan-file-suffix
-                 actual-img
+                 actual-imgtype
                  imgtype)))
     (emsane-postop-simple-shell-operation "op1"
                                           :operation-shell-command convcmd)))
@@ -1011,8 +1062,7 @@ FILENAMEBASE concatenated with CURRENT-SUFFIX gives the concrete file name."
 
 ;;TODO recovering a sad postop q
 ;;(progn (oset (oref emsane-current-process-state :postop-queue) :state nil) (emsane-postop-go (oref emsane-current-process-state :postop-queue) ))
-;;the postop q rarely goes sad, but it does happen, so far because of some race condition with scanadf it seems
-;;that is, scanadf seems to report a file as finished before it actualy is
+;;the postop q rarely goes sad now.
 
 
 (provide 'emsane)

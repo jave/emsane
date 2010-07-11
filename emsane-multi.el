@@ -25,6 +25,28 @@
   )
 
 
+(defun emsane-multi-create-configs ()
+
+  (dolist (job emsane-job-list)
+    (let*
+        ((jobname (oref  job :object-name))
+         (bodyname (concat (oref  job :object-name) "-body")))
+      (emsane-multi-job (concat jobname "-multi")
+                        :job jobname
+                        ;;TODO this should be configurable
+                        :multi-section-list (list (emsane-multi-section "s1" :scanner "fujitsu1"
+                                                                        :page 1
+                                                                        :start-section bodyname)
+                                                  (emsane-multi-section "s2" :scanner "fujitsu2"
+                                                                        :start-section bodyname
+                                                                        :page 1)
+                                                  (emsane-multi-section "s3" :scanner "fujitsu3"
+                                                                        :start-section bodyname
+                                                                        :page   1)
+                                                  (emsane-multi-section "s4" :scanner "fujitsu4"
+                                                                        :start-section bodyname
+                                                                        :page  1))))))
+
 
 (defun emsane-multi-scan-start (multi-job job-id &optional section-overide)
   "Scan a single project with multiple scanners. Each scanner

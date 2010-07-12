@@ -322,13 +322,21 @@ there can only be one emsane-tracker object with a particular name.")
   "default values for section slots")
 
 
-(defclass emsane-process-state ()
-  (;;per job. currently a new instance is ceated for every scan buffer, and the "per-job" part cloned
+(defclass emsane-job-state ()
+(
+ ;;per job. 
    (postop-queue :initarg :postop-queue)
    (job :initarg :job)
    (job-id :initarg :job-id)
    (missing-files :initarg :missing-files)
-   ;;per buffer
+   (emsane-query-recall :initarg :emsane-query-recall)
+)
+(defmethod emsane-query-recall-reset ((emsane-job-state this))
+  (oset this emsane-query-recall nil))
+
+(defclass emsane-process-state ()
+  (
+   ;;per process buffer
    (section :initarg :section)
    (section-overide :initarg :section-overide :initform nil)
    (subsection :initarg :subsection :initform 0)
@@ -341,11 +349,6 @@ there can only be one emsane-tracker object with a particular name.")
   (oset this :missing-files (emsane-postop-lifo "missing-files"))
   (call-next-method))
 
-;;TODO stopgap global recall object again...
-;; global state i dont want. could go into process-state
-(defvar emsane-query-recall nil)
-(defun emsane-query-recall-reset ()
-  (setq emsane-query-recall nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 (defmethod emsane-handle-slot ((this emsane-section-interface) slot)
@@ -356,12 +359,12 @@ there can only be one emsane-tracker object with a particular name.")
 
         (if (and (object-p sv) (object-of-class-p sv emsane-query))
             ;;if this exact query already was answered, return the previous value
-            (if (assq sv emsane-query-recall)
-                (cdr (assq sv emsane-query-recall))
+            (if (assq sv (oref job-state :emsane-query-recall))
+                (cdr (assq sv (oref job-state :emsane-query-recall)))
               ;;otherwise ask the question and store it
               (progn
                 (setq query-result (emsane-do-query sv))
-                (setq emsane-query-recall (append (list (cons sv query-result)) emsane-query-recall))
+                (oset job-state :emsane-query-recall (append (list (cons sv query-result)) (oref job-state :emsane-query-recall)))
                 query-result
                 )
               )
@@ -627,7 +630,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                                     :section start-section
                                     :section-overide section-overide
                                     )))
-    (unless noreset     (emsane-query-recall-reset))     ;;TODO dont reset in the multi-scan case wtf...
+    (unless noreset     (emsane-query-recall-reset job-state))     ;;TODO dont reset in the multi-scan case wtf...
     (emsane-fixup-section-chain state)
     (emsane-scan state))
   )

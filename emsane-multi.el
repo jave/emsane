@@ -63,7 +63,7 @@ will scan different sections of the material."
                                 :default-directory (emsane-get-job-dir job job-id)
                                 :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
        )
-    (emsane-query-recall-reset)   
+    (emsane-query-recall-reset job-state)   
     (mapcar (lambda (msection)
               (emsane-scan-start
                job

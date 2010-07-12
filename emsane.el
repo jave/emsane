@@ -526,20 +526,20 @@ Parent directories are created if needed."
     (mkdir dir t)
     dir))
 
-;;TODO refactor
-(defmethod emsane-get-job-dir  ((this emsane-job) job-id)
-  "Return directory used to store scans.
-Parent directories are created if needed."
-  (let
-      ((dir (concat (expand-file-name (emsane-get-root-directory this))
-                    "/"
-                    job-id
-                    "/")))
-    (mkdir dir t)
-    dir))
+;; ;;TODO refactor
+;; (defmethod emsane-get-job-dir  ((this emsane-job) job-id)
+;;   "Return directory used to store scans.
+;; Parent directories are created if needed."
+;;   (let
+;;       ((dir (concat (expand-file-name (emsane-get-root-directory this))
+;;                     "/"
+;;                     job-id
+;;                     "/")))
+;;     (mkdir dir t)
+;;     dir))
 
 
-(defmethod emsane-set-section ((this emsane-process-state) &optional section)
+(defmethod emsane-set-section ((this emsane-process-state) job-state &optional section)
   "Set section. if SECTION is nil, prompt for one."
 
   (if (oref this :section-overide)
@@ -548,7 +548,7 @@ Parent directories are created if needed."
   ;;then figure out the section
   (unless section
     (setq section (emsane-section-get
-                   (emsane-do-query (emsane-query-string "gimmesection" :prompt "Section" :values (oref (oref this :job) :section-list))))))
+                   (emsane-do-query (emsane-query-string "gimmesection" :prompt "Section" :values (oref (oref job-state :job) :section-list))))))
   ;;then set it
   (oset this :section section)
   ;;then take care of section overides
@@ -613,15 +613,17 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
        ((job (emsane-job-get (emsane-do-query (emsane-query-object "gimmejob" :prompt "job" :object-type 'job))))
         (job-id (emsane-read-job-id job))
         (start-section  (car (emsane-get-sections job)))
-        (queue (emsane-postop-queue job-id
-                                    :default-directory (emsane-get-job-dir job-state)
-                                    :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
         (job-state (emsane-job-state job-id
                                      :job-id job-id
                                      :job job
-                                     :postop-queue queue
-                                     ))
+                                     :postop-queue nil;;TODO
+                                     ))        
+        (queue (emsane-postop-queue job-id
+                                    :default-directory (emsane-get-job-dir job-state)
+                                    :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
+
         )
+     (oset job-state :postop-queue queue) ;; TODO
      (list job-state start-section)))
   (unless start-section (setq start-section (car (emsane-get-sections job))) )
   (let*
@@ -752,7 +754,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 
 (defun emsane-set-section-cps ()
   (interactive)
-  (emsane-set-section emsane-current-process-state)
+  (emsane-set-section emsane-current-process-state emsane-current-job-state)
   )
 
 (defun emsane-set-page-cps ()
@@ -921,7 +923,7 @@ Argument STRING output from scanadf."
         (emsane-postop-go (oref job-state :postop-queue))
         ;;(if (oref state :continue-go-loop) (emsane-postop-go (oref state :postop-queue)))
         )
-    (emsane-postop-push (oref state :missing-files) filename)))
+    (emsane-postop-push (oref job-state :missing-files) filename)))
 
 (defun emsane-dired-notifier ()
   ;;adding files from dired, mostly for debugging

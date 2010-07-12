@@ -65,13 +65,15 @@ will scan different sections of the material."
        )
     (emsane-query-recall-reset job-state)   
     (mapcar (lambda (msection)
+              (let
+                  ((job-state (emsane-job-state job-id
+                                                :job-id job-id
+                                                :queue queue
+                                                :job job))))
               (emsane-scan-start
-               job
-               job-id
+               job-state
                (emsane-section-get (oref msection :start-section))
                msection   ;;section-overide should probably be made, per section 
-               queue
-               t
                )
               ) msection-list)))
 

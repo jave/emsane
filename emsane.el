@@ -173,7 +173,7 @@
   "emsane-tracker works similar to eieio-instance-tracker, but it is also named, and the name works like a primary key.
 there can only be one emsane-tracker object with a particular name.")
 
-(defmethod initialize-instance ((this emsane-tracker)
+(defmethod initialize-instance :primary ((this emsane-tracker)
                                 &rest slots)
   "make sure only 1 object with a particular name on the tracker list."
   (let*
@@ -620,20 +620,28 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                                      ))        
         (queue (emsane-postop-queue job-id
                                     :default-directory (emsane-get-job-dir job-state)
-                                    :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id))))
-
-        )
+                                    :process-buffer (get-buffer-create (format "*emsane postop %s*" job-id)))))
      (oset job-state :postop-queue queue) ;; TODO
      (list job-state start-section)))
-  (unless start-section (setq start-section (car (emsane-get-sections job))) )
+  (unless start-section (setq start-section (car (emsane-get-sections (oref job-state :job)))))
   (let*
       ((state (emsane-process-state (oref job-state :job-id)
                                     :section start-section
                                     :section-overide section-overide
                                     )))
     (emsane-fixup-section-chain state)
-    (emsane-scan job-state  state))
-  )
+    (emsane-scan job-state state)))
+
+(defun emsane-scan-again ()
+  "scan again, only the job id will be re-read."
+  (interactive)
+  (oset emsane-current-job-state :job-id (emsane-read-job-id  (oref emsane-current-job-state :job)))
+  (oset emsane-current-job-state :postop-queue
+        (emsane-postop-queue (oref emsane-current-job-state :job-id)
+                             :default-directory (emsane-get-job-dir emsane-current-job-state)
+                             :process-buffer (get-buffer-create (format "*emsane postop %s*" (oref emsane-current-job-state :job-id)))))
+  (emsane-scan-start emsane-current-job-state))
+
 
 (defmethod emsane-fixup-section-chain ((this emsane-process-state))
   ;;:section-overide must be put in :section, and :section be made parent
@@ -751,6 +759,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 ;;TODO do something about these tedious wrappers, like a macro on defmethod or somesuch
 
 ;; "-cps" means "-current-process-state" which is a buffer local
+;; or also curent job state
 
 (defun emsane-set-section-cps ()
   (interactive)
@@ -780,6 +789,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (let ((map (make-sparse-keymap)))
     (define-key map "\C-m"        'emsane-scan-continue)
     (define-key map "s"           'emsane-scan-start)
+    (define-key map "a"           'emsane-scan-again)
     (define-key map "m"           'emsane-multi-scan-start)    
     (define-key map "n"           'emsane-set-section-cps) 
     (define-key map "p"           'emsane-set-page-cps)

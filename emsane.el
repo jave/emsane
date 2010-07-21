@@ -283,6 +283,9 @@ there can only be one emsane-tracker object with a particular name.")
                :documentation "image type(djvu,jpeg)")
    (operation-list :initarg :operation-list :initform nil ;;TODO why do i have this initform in an interface?
                    :documentation "A list of operations to be used for every image scanned in this section")
+   (subsection-idx :initarg :subsection-idx :initform 0)
+   (section-idx :initarg :section-idx :initform 0)
+
    )
   :abstract t )
 
@@ -315,9 +318,11 @@ there can only be one emsane-tracker object with a particular name.")
                         :source  (emsane-query-atom "sources" :prompt "Source"  :values '(duplex simplex ))
                         :mode    (emsane-query-atom "modes" :prompt "Mode" :values '(lineart color ))
                         :resolution   (emsane-query-integer "resolution" :prompt "Resolution")
-                        :file-pattern (emsane-query-string  "file-pattern" :prompt "File pattern" :require-match nil)
+                        :file-pattern "%02d%02d-%%04d"
+                        ;;(emsane-query-string  "file-pattern" :prompt "File pattern" :require-match nil)
                         :image-type   (emsane-query-atom "image-types"  :prompt "Image type"  :values '(djvu jpeg ))
                         :parent nil
+                        :section-idx 0 :subsection-idx 0
                         )
   "default values for section slots")
 
@@ -337,7 +342,8 @@ there can only be one emsane-tracker object with a particular name.")
    ;;per process buffer
    (section :initarg :section)
    (section-overide :initarg :section-overide :initform nil)
-   (subsection :initarg :subsection :initform 0)
+   (subsection-idx :initarg :subsection-idx :initform 0)
+   (section-idx :initarg :section-idx :initform 0)
    (page :initarg :page)
    )
   )
@@ -397,12 +403,14 @@ there can only be one emsane-tracker object with a particular name.")
                                  (emsane-do-query (emsane-query-integer "gimmeint" :prompt "Page number(1st continue)" :default 1))))
      (t startnum))))
 
-(defmethod emsane-get-file-pattern ((this emsane-section-interface) job-state)
+(defmethod emsane-get-file-pattern ((this emsane-section-interface) job-state process-state)
+  "return a file pattern looking like AABB-%04d.
+AA is a section-idx from process-state, and BB subsection-idx"
   (let*
       ((pattern (emsane-handle-slot this job-state 'file-pattern)))
     (if (functionp pattern)
         (funcall pattern)
-      pattern
+      (format pattern (oref process-state :section-idx) (oref process-state :subsection-idx))
       )))
 
 ;;TODO these are query methods(because they ask the user stuff) so should go in the query file
@@ -411,9 +419,18 @@ there can only be one emsane-tracker object with a particular name.")
   (oset this :page page)
   )
 
-(defmethod emsane-set-subsection ((this emsane-process-state) &optional subsection)
-  (unless subsection (setq subsection (read-number "subsection:")))
-  (oset this :subsection subsection))
+(defmethod emsane-set-subsection-idx ((this emsane-process-state) &optional subsection-idx)
+  "used when the usual sections are too restrictive"
+  (unless subsection-idx (setq subsection-idx (read-number "subsection-idx:")))
+  (oset this :subsection-idx subsection-idx)
+  (emsane-set-page 1)
+  )
+
+(defmethod emsane-set-section-idx ((this emsane-process-state) &optional section-idx)
+  "normaly use the section setting instead"
+  (unless section-idx (setq section-idx (read-number "section-idx:")))
+  (oset this :section-idx section-idx)
+  (emsane-set-page 1))
 
 
 ;;TODO refactor get-source and get-mode
@@ -562,7 +579,9 @@ Parent directories are created if needed."
   ;;but, the section includes section-overide! and for fujitsu2 there is a query there, which is already answered
   ;;so page needs to be thoroughly reset in this mode
 
-  
+  ;;now handle idx:es
+  (oset this :section-idx (oref section :section-idx))
+  (oset this :subsection-idx (oref section :subsection-idx))
   
   )
 
@@ -689,7 +708,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
            (dealiased-source (emsane-get-source section this))
            (resolution (emsane-get-resolution section this))
            (dealiased-mode (emsane-get-mode section this))
-           (file-pattern (emsane-get-file-pattern section this))
+           (file-pattern (emsane-get-file-pattern section this process-state))
            (startcount  (if (slot-boundp process-state :page) (oref process-state :page) (emsane-get-page process-state this section)))
            (dummy-startcount (oset process-state :page startcount)) ;;i suppose these "dummy" bindings arent stellar
            (imgtype (emsane-get-image-type section this))
@@ -771,9 +790,14 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (emsane-set-page emsane-current-process-state)
   )
 
-(defun emsane-set-subsection-cps ()
+(defun emsane-set-subsection-idx-cps ()
   (interactive)
-  (emsane-set-subsection emsane-current-process-state)
+  (emsane-set-subsection-idx emsane-current-process-state)
+  )
+
+(defun emsane-set-section-idx-cps ()
+  (interactive)
+  (emsane-set-section-idx emsane-current-process-state)
   )
 
 
@@ -793,7 +817,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
     (define-key map "m"           'emsane-multi-scan-start)    
     (define-key map "n"           'emsane-set-section-cps) 
     (define-key map "p"           'emsane-set-page-cps)
-    (define-key map "i"           'emsane-set-subsection-cps) ;; i for index
+    (define-key map "i"           'emsane-set-subsection-idx-cps) ;; i for index
     (define-key map "d"           'emsane-jump-to-dired-cps)
     (define-key map "q"           'emsane-scan-quit)
     ;;TODO keys:
@@ -836,23 +860,23 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;subsection support
+;;subsection-idx support
 
-;; (defun emsane-set-subsection (subsection)
-;;   "set subsection counter"
-;;   (interactive (list (emsane-ask-subsection)))
-;;   (setq emsane-subsection subsection)
+;; (defun emsane-set-subsection-idx (subsection-idx)
+;;   "set subsection-idx counter"
+;;   (interactive (list (emsane-ask-subsection-idx)))
+;;   (setq emsane-subsection-idx subsection-idx)
 ;;   (emsane-set-page 1)
 ;;   )
 
-;; (defun emsane-subsection-filepattern ()
-;;   "used in configs when you want a subsection counter"
+;; (defun emsane-subsection-idx-filepattern ()
+;;   "used in configs when you want a subsection-idx counter"
 ;;   ;;TODO support section id
-;;   (concat  (format "01%02d" emsane-subsection) "-%04d" ))
+;;   (concat  (format "01%02d" emsane-subsection-idx) "-%04d" ))
 
-(defmacro emsane-subsection-filepattern-lambda (section)
+(defmacro emsane-subsection-idx-filepattern-lambda (section)
   `(lambda ()   (concat  (format "%02d%02d" ,section
-                                 (oref emsane-current-process-state :subsection)) "-%04d" )))
+                                 (oref emsane-current-process-state :subsection-idx)) "-%04d" )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

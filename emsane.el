@@ -174,7 +174,7 @@
 there can only be one emsane-tracker object with a particular name.")
 
 (defmethod initialize-instance :primary ((this emsane-tracker)
-                                &rest slots)
+                                         &rest slots)
   "make sure only 1 object with a particular name on the tracker list."
   (let*
       ((sym (oref this tracking-symbol))
@@ -287,7 +287,8 @@ there can only be one emsane-tracker object with a particular name.")
    (section-idx :initarg :section-idx :initform 0)
 
    )
-  :abstract t )
+  ;;:abstract t
+  )
 
 
 
@@ -306,9 +307,11 @@ there can only be one emsane-tracker object with a particular name.")
   "class describing a section")
 
 ;;;value class
-(defclass emsane-section-value (emsane-section-interface emsane-parent)
-  ()
-  )
+(defclass emsane-section-value (eieio-named emsane-section-interface emsane-parent)
+  (
+   ;;(object-name :initarg :object-name)
+   )
+  "val obj")
 
 (defvar emsane-the-section-defaults
   (emsane-section-value "the-section-defaults"
@@ -341,18 +344,18 @@ there can only be one emsane-tracker object with a particular name.")
   (
    ;;per process buffer
    (section :initarg :section)
-   (section-overide :initarg :section-overide :initform nil)
-   (subsection-idx :initarg :subsection-idx :initform 0)
-   (section-idx :initarg :section-idx :initform 0)
+   (section-overide :initarg :section-overide) ;;TODO empty overide object
    (page :initarg :page)
    )
   )
 
-;;(defmethod initialize-instance ((this emsane-process-state)  &rest slots)  (call-next-method))
+(defmethod initialize-instance ((this emsane-process-state)  &rest slots)
+  (oset this :section-overide (emsane-section-interface "section-overide"))
+  (call-next-method))
+
 (defmethod initialize-instance ((this emsane-job-state)  &rest slots)
   (oset this :missing-files (emsane-postop-lifo "missing-files"))
   (call-next-method))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;
 (defmethod emsane-handle-slot ((this emsane-section-interface) job-state slot)
@@ -410,7 +413,7 @@ AA is a section-idx from process-state, and BB subsection-idx"
       ((pattern (emsane-handle-slot this job-state 'file-pattern)))
     (if (functionp pattern)
         (funcall pattern)
-      (format pattern (oref process-state :section-idx) (oref process-state :subsection-idx))
+      (format pattern (emsane-handle-slot this job-state  :section-idx) (emsane-handle-slot this job-state :subsection-idx))
       )))
 
 ;;TODO these are query methods(because they ask the user stuff) so should go in the query file
@@ -422,15 +425,15 @@ AA is a section-idx from process-state, and BB subsection-idx"
 (defmethod emsane-set-subsection-idx ((this emsane-process-state) &optional subsection-idx)
   "used when the usual sections are too restrictive"
   (unless subsection-idx (setq subsection-idx (read-number "subsection-idx:")))
-  (oset this :subsection-idx subsection-idx)
-  (emsane-set-page 1)
+  (oset (oref this :section-overide) :subsection-idx subsection-idx)
+  (emsane-set-page this 1)
   )
 
-(defmethod emsane-set-section-idx ((this emsane-process-state) &optional section-idx)
-  "normaly use the section setting instead"
-  (unless section-idx (setq section-idx (read-number "section-idx:")))
-  (oset this :section-idx section-idx)
-  (emsane-set-page 1))
+;; (defmethod emsane-set-section-idx ((this emsane-process-state) &optional section-idx)
+;;   "normaly use the section setting instead"
+;;   (unless section-idx (setq section-idx (read-number "section-idx:")))
+;;   (oset this :section-idx section-idx)
+;;   (emsane-set-page 1))
 
 
 ;;TODO refactor get-source and get-mode
@@ -471,7 +474,7 @@ AA is a section-idx from process-state, and BB subsection-idx"
 
 (defmethod emsane-get-buffer-create ((this emsane-scanner))
   (let*
-      ((buffer (get-buffer-create (format "*Emsane %s*" (oref this object-name)))))
+      ((buffer (get-buffer-create (format "*Emsane %s*" (oref this :object-name)))))
     (with-current-buffer buffer
       ;;dont reset locals if already in correct mode
       (unless (eq major-mode 'emsane-mode) (emsane-mode)))
@@ -515,7 +518,7 @@ AA is a section-idx from process-state, and BB subsection-idx"
   "fetch the next logical section from the job"
   (let
       ((mylist (emsane-get-section-names this)))
-    (while (not (equal (oref current-section object-name) (car mylist) ))
+    (while (not (equal (oref current-section :object-name) (car mylist) ))
       (setq mylist (cdr mylist)))
     (emsane-section-get (cadr mylist))))
 
@@ -559,9 +562,13 @@ Parent directories are created if needed."
 (defmethod emsane-set-section ((this emsane-process-state) job-state &optional section)
   "Set section. if SECTION is nil, prompt for one."
 
-  (if (oref this :section-overide)
-      (slot-makeunbound (oref this :section-overide) :page)) ;;section-overide should be somewhat reset as well. a bit too ungeneral for my taste
-
+  (if (oref this :section-overide);;section-overide should be somewhat reset as well. a bit too ungeneral for my taste
+      (progn
+        (slot-makeunbound (oref this :section-overide) :page) 
+        (slot-makeunbound (oref this :section-overide) :subsection-idx)
+        (slot-makeunbound (oref this :section-overide) :section-idx)
+        ))
+  
   ;;then figure out the section
   (unless section
     (setq section (emsane-section-get
@@ -580,8 +587,8 @@ Parent directories are created if needed."
   ;;so page needs to be thoroughly reset in this mode
 
   ;;now handle idx:es
-  (oset this :section-idx (oref section :section-idx))
-  (oset this :subsection-idx (oref section :subsection-idx))
+  ;;(oset this :section-idx (oref section :section-idx))
+  ;;(oset this :subsection-idx (oref section :subsection-idx))
   
   )
 
@@ -643,6 +650,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
      (oset job-state :postop-queue queue) ;; TODO
      (list job-state start-section)))
   (unless start-section (setq start-section (car (emsane-get-sections (oref job-state :job)))))
+  (unless section-overide (setq section-overide (emsane-section-value "so")))
   (let*
       ((state (emsane-process-state (oref job-state :job-id)
                                     :section start-section
@@ -669,6 +677,7 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
       ((section-overide (oref this :section-overide)))
     (if section-overide
         (progn
+          (oset section-overide :object-name (oref (oref this :section) :object-name))
           (oset section-overide  :parent (oref this :section))
           (oset this :section section-overide))
       )))
@@ -858,25 +867,6 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
   (if (emsane-process-running)
       (delete-process (current-buffer))))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;subsection-idx support
-
-;; (defun emsane-set-subsection-idx (subsection-idx)
-;;   "set subsection-idx counter"
-;;   (interactive (list (emsane-ask-subsection-idx)))
-;;   (setq emsane-subsection-idx subsection-idx)
-;;   (emsane-set-page 1)
-;;   )
-
-;; (defun emsane-subsection-idx-filepattern ()
-;;   "used in configs when you want a subsection-idx counter"
-;;   ;;TODO support section id
-;;   (concat  (format "01%02d" emsane-subsection-idx) "-%04d" ))
-
-(defmacro emsane-subsection-idx-filepattern-lambda (section)
-  `(lambda ()   (concat  (format "%02d%02d" ,section
-                                 (oref emsane-current-process-state :subsection-idx)) "-%04d" )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

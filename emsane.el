@@ -281,13 +281,13 @@ there can only be one emsane-tracker object with a particular name.")
    (image-type :initarg :image-type
                :accessor emsane-section-get-image-type
                :documentation "image type(djvu,jpeg)")
-   (operation-list :initarg :operation-list :initform nil ;;TODO why do i have this initform in an interface?
+   (operation-list :initarg :operation-list
                    :documentation "A list of operations to be used for every image scanned in this section")
-   (subsection-idx :initarg :subsection-idx :initform 0)
-   (section-idx :initarg :section-idx :initform 0)
+   (subsection-idx :initarg :subsection-idx)
+   (section-idx :initarg :section-idx)
 
    )
-  ;;:abstract t
+  :abstract t
   )
 
 
@@ -350,7 +350,7 @@ there can only be one emsane-tracker object with a particular name.")
   )
 
 (defmethod initialize-instance ((this emsane-process-state)  &rest slots)
-  (oset this :section-overide (emsane-section-interface "section-overide"))
+  (oset this :section-overide (emsane-section-value "section-overide"))
   (call-next-method))
 
 (defmethod initialize-instance ((this emsane-job-state)  &rest slots)

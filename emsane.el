@@ -53,6 +53,7 @@
 ;;; Code:
 
 (require 'eieio)
+(require 'eieio-base)
 (require 'emsane-postop)
 (require 'emsane-query)
 
@@ -221,6 +222,14 @@ there can only be one emsane-tracker object with a particular name.")
                 :documentation "t if scanner is a flatbed which scans forever withouth this flag")
    )
   "class describing a SANE scanner")
+
+(defclass emsane-scanner-gphoto2 (emsane-scanner)
+  ( )
+  "class describing a gphoto2 scanner")
+
+(defclass emsane-scanner-fswebcam (emsane-scanner)
+  ( )
+  "class describing a fswebcam scanner")
 
 
 (defclass emsane-job (emsane-tracker   ;; store instantiated objects in a list
@@ -463,12 +472,12 @@ AA is a section-idx from process-state, and BB subsection-idx"
 
 (defmethod emsane-source-dealias ((this emsane-scanner) source-alias)
   (let ((source-dealias-rv  (cadr (assoc source-alias (oref this sources)))))
-    (assert (not (null source-dealias-rv)) nil "null not allowed for alias")
+    (assert (not (null source-dealias-rv)) nil (format  "null not allowed for source alias '%s'" source-alias))
     source-dealias-rv))
 
 (defmethod emsane-mode-dealias ((this emsane-scanner) mode-alias)
   (let ((mode-dealias-rv (cadr (assoc mode-alias (oref this modes)))))
-    (assert (not (null mode-dealias-rv)) nil "null not allowed for alias")
+    (assert (not (null mode-dealias-rv)) nil (format  "null not allowed for mode alias '%s'" mode-alias))
     mode-dealias-rv))
 
 
@@ -742,26 +751,9 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
                             (list "--page-height" (number-to-string paperheight))))
            (scanscript (if (equal emsane-scan-file-ready-notifier 'emsane-scanadf-emacslient-notify)
                            (list "--script-wait" "--scan-script" emsane-scanadf-emacslient-path)))
-           (args `("scanadf" ,buffer "scanadf"
-                   "--device-name" ,(oref scanner :device)
-                   ,@(if dealiased-source (list "--source" dealiased-source))
-                   "--mode" ,dealiased-mode;;(emsane-mode-dealias scanner  mode)
-                   ,@options;;(emsane-get-options scanner  emsane-current-section) ;;scanner specific options
-                   ,@scanscript
-                   "--resolution"  ,(number-to-string resolution)
-                   "--output-file" ,(concat file-pattern emsane-scan-file-suffix)
-                   "--start-count" ,(number-to-string startcount)
-                   ,@(if (oref scanner :inhibit-adf) (list "--end-count" (number-to-string startcount) ))
-                   "-l" ,(number-to-string topleft)
-                   "-t" ,(number-to-string 0)
-                   "-x" ,(number-to-string paperwidth)
-
-                   ;;TODO figure out how to handle height better.
-                   ;; y is height of scan-area
-                   ;; page-height is height of scanner physical scan area, but this is less than max by default.
-                   ;;y <= paperheight
-                   "-y" ,(number-to-string paperheight)
-                   ,@page-height))
+           (args (emsane-mk-scan-proc-args  scanner buffer dealiased-source dealiased-mode options scanscript
+                                                resolution file-pattern emsane-scan-file-suffix
+                                                startcount topleft paperwidth paperheight page-height))
            (dbg-process
             (format "scan command: %s\n" args
                     ;;(mapconcat (lambda (x) x) (cddr args) " ")
@@ -781,6 +773,51 @@ SIZE-STRING is either an ISO paper size \"A4\" or a string like \"210 x 297\" (A
         (process-put scan-process 'emsane-process-state process-state)
         (process-put scan-process 'emsane-job-state this)
         ))))
+
+;;emsane-mk-scan-proc-args should create a list of args for scan-process
+(defmethod emsane-mk-scan-proc-args ((scanner emsane-scanner) buffer dealiased-source dealiased-mode options scanscript
+                                     resolution file-pattern emsane-scan-file-suffix
+                                     startcount topleft paperwidth paperheight page-height)
+  `("scanadf" ,buffer "scanadf"
+    "--device-name" ,(oref scanner :device)
+    ,@(if dealiased-source (list "--source" dealiased-source))
+    "--mode" ,dealiased-mode;;(emsane-mode-dealias scanner  mode)
+    ,@options;;(emsane-get-options scanner  emsane-current-section) ;;scanner specific options
+    ,@scanscript
+    "--resolution"  ,(number-to-string resolution)
+    "--output-file" ,(concat file-pattern emsane-scan-file-suffix)
+    "--start-count" ,(number-to-string startcount)
+    ,@(if (oref scanner :inhibit-adf) (list "--end-count" (number-to-string startcount) ))
+    "-l" ,(number-to-string topleft)
+    "-t" ,(number-to-string 0)
+    "-x" ,(number-to-string paperwidth)
+    
+    ;;TODO figure out how to handle height better.
+    ;; y is height of scan-area
+    ;; page-height is height of scanner physical scan area, but this is less than max by default.
+    ;;y <= paperheight
+    "-y" ,(number-to-string paperheight)
+    ,@page-height)  )
+
+(defmethod emsane-mk-scan-proc-args ((scanner emsane-scanner-gphoto2) buffer dealiased-source dealiased-mode options scanscript
+                                                resolution file-pattern emsane-scan-file-suffix
+                                                startcount topleft paperwidth paperheight page-height)
+  `("gphoto2" ,buffer "gphoto2"
+    "--camera" ,(oref scanner :device)
+    "--capture-image-and-download"
+    ,@options;;(emsane-get-options scanner  emsane-current-section) ;;scanner specific options
+    ;;"--hook-script" ,@scanscript ;;TODO
+    "--filename" ,(format  (concat file-pattern emsane-scan-file-suffix) startcount))  )
+
+(defmethod emsane-mk-scan-proc-args ((scanner  emsane-scanner-fswebcam) buffer dealiased-source dealiased-mode options scanscript
+                                     resolution file-pattern emsane-scan-file-suffix
+                                     startcount topleft paperwidth paperheight page-height)
+  `("fswebcam" ,buffer "fswebcam"
+    "--device" ,(oref scanner :device)
+    ,@options;;(emsane-get-options scanner  emsane-current-section) ;;scanner specific options
+    ;;"--hook-script" ,@scanscript ;;TODO
+    ,(format  (concat file-pattern emsane-scan-file-suffix) startcount)
+    )  )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; mode setup
@@ -908,9 +945,10 @@ Argument MSG is the exit code."
 Argument PROC scanadf process.
 Argument STRING output from scanadf."
   (with-current-buffer (process-buffer proc)
-    (let ((moving (= (point) (process-mark proc)))
+    (let* ((moving (= (point) (process-mark proc)))
           (state (process-get proc 'emsane-process-state))
-          (job-state (process-get proc 'emsane-job-state)))
+          (job-state (process-get proc 'emsane-job-state))
+          (scanner (emsane-get-scanner (oref state :section) job-state)))
       (save-excursion
         (assert (not (null state)) nil "state cant be nil")
         ;; Insert the text, advancing the process marker.
@@ -918,18 +956,34 @@ Argument STRING output from scanadf."
         ;;break up string in lines and handle each
         ;;if we use the callback notifier this is handled elsewhere
         (if (equal emsane-scan-file-ready-notifier 'emsane-scanadf-line-handler)
-            (mapc (lambda (line) (emsane-scanadf-line-handler line state job-state))
+            (mapc (lambda (line) (emsane-scanner-line-handler scanner line state job-state))
                   (split-string string "\n" t)));;TODO doesnt handle the case when lines are split "in the middle"
-        (insert (format "filter:<<%s>>\n" ;;TODO should be possible to visit image files in the scanadf buffer!
-                        (substring string 0 -1);;remove linefeed
-                        ))
+        ;; (insert (format "filter:<<%s>>\n" ;;TODO should be possible to visit image files in the scanadf buffer!
+        ;;                 (substring string 0 -1);;remove linefeed
+        ;;                 )
+                
         (set-marker (process-mark proc) (point)))
       (if moving (goto-char (process-mark proc))))))
 
-(defun emsane-scanadf-line-handler (string state job-state)
+(defmethod emsane-scanner-line-handler ((this emsane-scanner) string state job-state)
   "Process a single line STRING of scanadf output."
   (cond
    ((string-match "Scanned document \\(.*\\)" string) ;;a string emitted by scanadf
+    (emsane-filename-handler (match-string 1 string) state job-state)
+    )))
+
+(defmethod emsane-scanner-line-handler ((this emsane-scanner-fswebcam) string state job-state)
+  "Process a single line STRING of fswebcam output."
+  (insert (format "{%s}\n" string))
+  (cond
+   ((string-match ".*Writing JPEG image to '\\(.*\\)'" string) ;;a string emitted by fswebcam
+    (emsane-filename-handler (match-string 1 string) state job-state)
+    )))
+
+(defmethod emsane-scanner-line-handler ((this emsane-scanner-gphoto2) string state job-state)
+  "Process a single line STRING of gphoto2 output."
+  (cond
+   ((string-match "Saving file as \\(.*\\)" string) ;;a string emitted by gphoto2
     (emsane-filename-handler (match-string 1 string) state job-state)
     )))
 
@@ -998,20 +1052,50 @@ Emacs")
       (setq emsane-postop-thumbnail nil)
     (setq emsane-postop-thumbnail t)))
 
+(defun emsane-match-page (filename)
+  (string-match "[0-9]+-\\([0-9]+\\)" filename)
+  (match-string 1 filename)
+  )
+
+(defun emsane-scanfilebase-conv (filename)
+  (string-match "\\([0-9]+\\)-\\([0-9]+\\)" filename)
+  (let* ( (section (match-string 1 filename))
+          (page (match-string 2 filename)))
+    ;;
+    ;;test a spread file name transform
+    (setq page (format "%04d%04d" (* 2 (string-to-number page))
+                       (1+ (* 2 (string-to-number page)))) )
+    (format "%s-%s" section page))
+  )
+
 (defun emsane-mkpostop-default (filename  section job-state)
   (let*
-      ((tx (emsane-postop-transaction "tx")))
+      ((tx (emsane-postop-transaction "tx"))
+       (scanfilebase (substring filename 0 ( - (length emsane-scan-file-suffix))) )
+       )
     (emsane-postop-setenv tx 'SCANFILE filename)
-    (emsane-postop-setenv tx 'SCANFILEBASE (substring filename 0 ( - (length emsane-scan-file-suffix))))
+    (emsane-postop-setenv tx 'SCANFILEBASE scanfilebase)
     (emsane-postop-setenv tx 'SCANFILECONVERTED (format "%s.%s"
-                                                        (emsane-postop-getenv tx 'SCANFILEBASE)
+                                                        scanfilebase
                                                         (emsane-get-image-type section job-state)))
+    (emsane-postop-setenv tx 'SCANFILERENAME (format "%s.%s"
+                                                        (emsane-scanfilebase-conv filename)
+                                                        (emsane-get-image-type section job-state)))
+    
     ;;push default op:s. these converts and deletes original.
     (emsane-postop-push tx (emsane-mkpostop-convert section job-state))
     (emsane-postop-push tx (emsane-postop-lisp-operation
                             "op"
                             :operation-lambda
                             (lambda (tx q) (delete-file (emsane-postop-getenv tx 'SCANFILE)))))
+    (emsane-postop-push tx (emsane-postop-lisp-operation
+                            "op"
+                            :operation-lambda
+                            (lambda (tx q) (rename-file (emsane-postop-getenv tx 'SCANFILECONVERTED)
+                                                        (emsane-postop-getenv tx 'SCANFILERENAME)))))
+
+    
+    
     (if emsane-postop-thumbnail (emsane-postop-push tx (emsane-postop-lisp-operation ;;TODO flag croping with defcustom
                                                         "crop"
                                                         :operation-lambda
@@ -1051,8 +1135,11 @@ FILENAMEBASE concatenated with CURRENT-SUFFIX gives the current concrete file na
     (cond
      ((equal desired-type type)
       (format
-       "cp %s %s.%s"  filename filenamebase suffix));;cp is for concistency, TODO find more efficient way
+       ;;cp is for concistency, mv would be more efficient but then the late rename stage would fail
+       "cp %s %s.%s"  filename filenamebase suffix))
      ((eq desired-type 'djvu)
+      ;;TODO this only works for particular formats, bitonal tiff or pbm
+      ;;check "type" before conversion
       (format "cjb2 -lossy %s %s.%s" filename  filenamebase suffix))
      ((eq desired-type 'djvu-color)
       (format "c44 %s %s.%s" filename  filenamebase suffix))

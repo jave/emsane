@@ -1,5 +1,7 @@
 ;; emsane.el -- Emacs SANE frontend
 
+;; License: GPL-3+
+
 ;;; Commentary:
 ;;
 

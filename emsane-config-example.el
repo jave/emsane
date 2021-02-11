@@ -113,6 +113,24 @@
                                       (jpg-bw    () jpg-bw)))
 
 
+;;You can also uso a webcam as a scanner
+(emsane-scanner-fswebcam "laptopcam"
+                         :scanwidth 216                         
+                         :device "/dev/video0"
+                         :options '()
+                         :modes '((color "Color"))                         
+                         :sources '((simplex ""))
+                         )
+
+;;You can even use a good digital camera as a scanner.
+;;mapping SANE options on gphoto2 is work in progress, since they often are not relevant.
+(emsane-scanner-gphoto2 "canoneos"
+                        :scanwidth 216           
+                        :device "Canon EOS Digital Rebel XTi (PTP mode)"
+                        :options '("--set-config" "/main/imgsettings/imageformat=0" "--force-overwrite")
+                        :modes '((color "") (lineart "") (gray ""))
+                        :sources '((simplex "") (duplex ""))                         
+                         )
 
 ;;global default scanner, it can be modified per buffer later
 ;;(setq emsane-default-scanner (emsane-scanner-get "fujitsu1"))

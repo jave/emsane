@@ -1,0 +1,163 @@
+* Emsane
+
+ Emsane is an Emancs frontend for SANE.  Emsane runs scanadf with
+ various jobs, to make it easy to scan books, magazines etc.
+
+ SANE is an acronym for "scanner acces now easy", scanner support
+ available for free operating systems, see
+ http://www.sane-project.org/
+
+Author: Joakim Verona, (C) FSF 2009, 2010, GPL
+joakim@verona.se
+
+Here are some of the interesting Emsane features:
+ - Emsane is a convenient Emacs interface to scanning
+ - Emsane handles one or several scanners
+ - Emsane can use different scanner settings for different sections of a book
+ - the power of Tramp lets you run scanners remotely over ssh
+ - you can dired your scans
+ - you can postprocess scans:
+   - format conversions, to djvu for instance
+   - unpaper
+ - there is a multi-scanner mode, scan different sections of a book with different scanners to speed up scanning
+
+ Brief usage:
+ - Define scanners and jobs in a file, "emsane-config.el"
+ for instance. See sample.
+ - load "emsane" and "emsane-config"
+ - start scanning with "emsane-scan-start
+ - check out the keybindings, but mostly you use "return" and "n" while scanning.
+
+* Configuring Emsane
+Emsane is configured by writing Elisp expressions. This is a great
+advantage when you have many complicated presets. Primarily the
+configuration is made by creating instances of EIEIO classes. This is
+an advantage when you have many similar but not identical
+configuration items.
+
+** Emsane eieio classes
+*** emsane-scanner 
+a set of options describing a scanner. 
+
+there are three supported scanner types:
+- scanadf
+- gphoto2
+- fswebcam
+
+
+*** emsane-section
+a list of scanner and postprocessing settings. a section corresponds
+to a part of a printed matter. For a book the page numbering and
+colour content can change between different parts for instance. 
+
+ A section definition can contain:
+ - paper size; expressed as an alias(ISO sizes or common book sizes), or width x height
+ - front or duplex scan
+ - color/lineart
+ - resolution
+ - file name pattern
+ - postprocessing options
+
+
+*** emsane-job 
+ a list of sections. you start a scan by selecting a job, then
+ switching between the different sections.
+
+
+* optional extras
+ emsane.el is complemented by other Emacs packages such as dired,
+ and some of my own packages such as dired-sequence.el, and a patch
+ to the Emacs core to optionaly use imagemagick for image display,
+ so djvu files can be shown in Emacs. (This was accepted upstream in
+ Emacs 24)
+
+* buffers
+- there is a control buffer per scanner.
+- there is a post-operation buffer for each job.
+
+
+
+* different types of devices
+Emsane was originally only supported scanadf, which is a Sane frontend
+for scanners with automatic document feeders. But scanadf also
+supports all the scanners Sane supports. In principle you could then
+use digital cameras with sanes gphoto2 backend. However, this is only
+beta in sane, so therefore Emsane also supports using gphoto2
+directly, and also fswebcam for good measure.
+
+* History of Emsane
+In 2010 I got a call from my wife while at work. I couldnt believe my
+ears, but apparently a fire had started at the neighbours house. I
+rushed home in a taxi, telling myself that it would work out fine. 
+
+When I arrieved, the fire department where already there and it seemed
+like it would turn out fine. Except the swedish climate makes for
+houses that have a very tight seal to the outside, so you cant easily get
+water inside to extinguish a fire. Also, since our type of house sits
+together in a long row, the fire department must decide on the most
+efficient way of saving all houses. So they made a hole in our roof
+and poured, I were told, 20 milion liters of water inside. The
+neighbours house was completely destroyed by fire. Ours was drenched
+in water and smoke, and the roof was destroyed by the fire.
+
+Anyway, being a bibliophile, I had hamstered a large library at
+home. All my books were now to some degree damaged, and in the not so
+long term all my library would rot away.
+
+I decided to convert my library into digital form. The most efficient
+method I could figure out was getting a number of ADF scanners,
+removing the bindings from the books and feed them through the
+scanners, and throw away the originals. 
+
+Remarcably enough there didnt seem to be a suitable scanner frontend
+that worked in accordance with my needs. Therefore I wrote Emsane.
+
+Emsane is a bit quirky and maybe not really suitable for one-shot
+scans, but I've scanned tens of thousands of pages with it, so its
+actually industrial strength efficient when you get the hang of it. 
+
+not all of emsane is equally well used of course. patches welcome.
+
+* requirements
+on Fedora:
+yum instal sane-frontends
+
+* WIP
+** DONE gphoto scanner
+   CLOSED: [2012-09-01 Sat 18:23]
+I want to be able to use gphoto to aquire scans(as well as existing
+support). Book pages are manually turned, and each scan also manually
+triggered.
+
+gphoto2 --capture-image-and-download
+
+scanadf has a gphoto backend, but it was tricky to control.
+
+It turned out easier to add separate scanner classes.
+
+** TODO emsane ELPA package
+** TODO support more complex file name patterns
+Each scan file name should correspond to the pages it contains. 
+Normally theres one page per scan, but sometimes there are more(like
+when you scan spreads)
+
+Scanadf is given a file name pattern and controls the file
+name. Therefore its easier to change the file name in the post
+operation stage. 
+** TODO replace tx-vars with closures
+the postop code has expressions like this:
+    (emsane-postop-setenv tx 'SCANFILE filename)
+which are basically used as a poor mans closures. Now that Emacs have
+closures we can use them.
+** TODO image format conversions doesnt handle gphoto well
+scanadf only produces pbm or pnm, and you can tell the scanner which
+image depth to produce. 
+
+gphoto2 is more dependant on what the camera produces, colour jpg,
+normally. cjb2 cant handle jpg input, so an aditional conversion stage
+is needed:
+
+convert 0100-0001.scn -threshold 128  pbm:0100-0001.pbm &&  cjb2 -verbose -lossy 0100-0001.pbm 0100-0001.djvu
+
+cjb2 doesnt seem to accept pipe input, and its not atm clear that this
+will ever produce good djvu output.
